@@ -158,9 +158,10 @@ window.SKY = window.SKY || {};
     SP.foam = radial(12, [[0, 'rgba(255,255,255,0.8)'], [0.5, 'rgba(235,245,255,0.38)'], [1, 'rgba(230,240,255,0)']]);
     SP.ebullet = mk(10, 10, (g) => {
       const gr = g.createRadialGradient(5, 5, 0, 5, 5, 5);
-      gr.addColorStop(0, '#fffbe8'); gr.addColorStop(0.3, '#ffd24a'); gr.addColorStop(0.55, 'rgba(255,90,20,0.85)'); gr.addColorStop(1, 'rgba(200,30,0,0)');
+      // violet, not the amber your own guns use - and rimmed, so it survives the glitter on the sea
+      gr.addColorStop(0, '#fff0ff'); gr.addColorStop(0.3, '#ff72e4'); gr.addColorStop(0.55, 'rgba(222,24,160,0.9)'); gr.addColorStop(1, 'rgba(70,0,56,0)');
       g.fillStyle = gr; g.fillRect(0, 0, 10, 10);
-      g.strokeStyle = 'rgba(50,10,0,0.55)'; g.lineWidth = 0.5; ell(g, 5, 5, 2.3, 2.3); g.stroke();
+      g.strokeStyle = 'rgba(26,0,22,0.7)'; g.lineWidth = 0.7; ell(g, 5, 5, 2.6, 2.6); g.stroke();
     });
     SP.pbullet = mk(3, 13, (g) => {
       const gr = g.createLinearGradient(0, 0, 0, 13); gr.addColorStop(0, '#fffef2'); gr.addColorStop(0.3, '#ffe27a'); gr.addColorStop(1, 'rgba(255,150,20,0)');

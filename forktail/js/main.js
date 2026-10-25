@@ -151,10 +151,15 @@
   window.addEventListener('pointercancel', endPointer);
   // block scrolling, pinch-zoom, double-tap zoom, pull-to-refresh, callouts
   const stop = (e) => { if (e.cancelable) e.preventDefault(); };
-  // The DOM panels (hangar, campaign map, dossier, briefings) must keep native touch behaviour:
-  // preventDefault on touchend cancels the synthesized click, which killed every panel button on
-  // touch devices, and preventDefault on touchmove stops the panels scrolling.
-  const inUI = (e) => { const t = e.target; return !!(t && t.closest && t.closest('#ui .panel, #ui .toast, #ui .brief')); };
+  // The DOM overlay must keep native touch behaviour: preventDefault on touchend cancels the
+  // synthesized click, which kills every DOM button on a touch device, and preventDefault on
+  // touchmove stops the panels scrolling.
+  // Ask the hit test, not a list of class names. #ui is click-through except where a control says
+  // otherwise, so a touch only lands INSIDE it when it landed on something meant to be pressed -
+  // which is exactly the question. A list gets this wrong the first time anything is renamed, and
+  // it did: the radio card stopped being .toast, and the new-build banner never was in #ui at all,
+  // so TAP TO UPDATE did nothing on a phone.
+  const inUI = (e) => { const t = e.target; return !!(t && t.closest && t.closest('#ui, .update')); };
   document.addEventListener('touchmove', (e) => { if (!inUI(e)) stop(e); }, { passive: false });
   document.addEventListener('touchstart', (e) => { A.unlock(); if (!inUI(e) && e.touches.length > 1) stop(e); }, { passive: false });
   document.addEventListener('touchend', (e) => { A.unlock(); if (!inUI(e)) stop(e); }, { passive: false });

@@ -1295,9 +1295,13 @@ export function createRenderer(canvas, S) {
       }
       for (const b of w.eb) {
         const ea = altW(b) - 2;
-        sprite(SMOKE, b.x, b.y, ea, 4.4, 1, 0, 0.16, 0.02, 0.01, 0.85, 2);   // same reason as above
-        sprite(ADD, b.x, b.y, ea, 8.2, 1, 0, 1.0, 0.3, 0.1, 0.95, 2);
-        sprite(ADD, b.x, b.y, ea, 3.4, 1, 0, 1.0, 0.95, 0.8, 1, 2);
+        // Enemy fire was the same cream-and-amber as your own, which is a hard read at the best of
+        // times and no read at all over the sun's glitter on the water: additive light on a white
+        // highlight adds nothing. So: violet, which is in nothing else on screen, and a dark rim
+        // UNDER it and wider than it, so the round is legible against bright sea as well as dark.
+        sprite(SMOKE, b.x, b.y, ea, 11.0, 1, 0, 0.03, 0.00, 0.04, 0.88, 2);   // rim
+        sprite(SMOKE, b.x, b.y, ea, 7.2, 1, 0, 0.86, 0.05, 0.62, 1, 2);        // body: opaque, so
+        sprite(ADD, b.x, b.y, ea, 3.2, 1, 0, 1.0, 0.70, 0.96, 1, 2);           // white sea cannot eat it
       }
       // ---- pickups: 3D medallions
       for (const k of w.pickups) {
