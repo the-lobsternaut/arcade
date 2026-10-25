@@ -219,7 +219,9 @@ window.SKY = window.SKY || {};
   function say(p, who, look, name, text, expr, framing) {
     const box = $('.hsay', p); if (!box || !hasFace(who)) return false;
     $('.htext', box).textContent = text; $('.hname', box).textContent = name;
-    showChar($('.hslot', p), who, look, { expr: expr, framing: framing || 'bust', animate: true });
+    // 'fit' shows the whole picture; 'bust' fills the box by cropping, and what it crops is the
+    // top of the head. The slot is a 2:3 box now, so there is nothing to crop anyway.
+    showChar($('.hslot', p), who, look, { expr: expr, framing: framing || 'fit', animate: true });
     charTalk(Math.min(5, text.length * 0.04));
     $('.hact', box).innerHTML = '';
     return true;
@@ -376,24 +378,31 @@ window.SKY = window.SKY || {};
       const st = levelState(i);
       const it = h('div', 'mitem ' + st);
       it.innerHTML = st === 'fog' ? '<b>? UNDISCOVERED</b><small>' + (l.bonus ? 'Bonus theater' : 'Further operations') + '</small>' : '<b>' + esc(l.name) + '</b><small>' + esc(l.date) + (l.bonus ? ' - BONUS' : l.optional ? ' - OPTIONAL' : '') + '</small>' + (run.done[l.id] ? '<i class="medal ' + run.done[l.id].medal + '"></i>' : '');
-      it.addEventListener('click', () => { A.sfx('click'); selectLevel(p, i); if (S.map3d && S.map3d.ok) S.map3d.focus(i); });
+      it.addEventListener('click', () => { A.sfx('click'); selectLevel(p, i, true); });
       list.appendChild(it);
     });
     const mv = $('.mapview', p);
     // the map owns its canvas and lends it to the panel, so the WebGL context outlives the panel
+    // a tap on a pin does not move the camera - you can already see what you tapped
     if (S.map3d && S.map3d.ok) { S.map3d.mount(mv, { levels: Ls, state: levelState, run, onPick: (i) => { A.sfx('click'); selectLevel(p, i); } }); }
     else mv.classList.add('nomap');
+    // Open on the next battle you can actually fly, and point the chart at it. Without the focus
+    // the ring, the card and the FLY MISSION button were all on the next one while the chart was
+    // still centred on the one you had just won - so the only pin on screen was the finished one,
+    // and tapping it turned the button into REPLAY MISSION. On a phone the list is hidden and the
+    // chart is the only way to choose, so the camera and the selection have to be the same thing.
     const next = Ls.findIndex((l, i) => levelState(i) === 'avail');
-    selectLevel(p, mapSel !== null && levelState(mapSel) === 'avail' ? mapSel : next >= 0 ? next : mapSel !== null && levelState(mapSel) !== 'fog' ? mapSel : 0);
+    selectLevel(p, mapSel !== null && levelState(mapSel) === 'avail' ? mapSel : next >= 0 ? next : mapSel !== null && levelState(mapSel) !== 'fog' ? mapSel : 0, 'snap');
     meritTxt(p);
   }
   UI.openMap = openMap;
   function levelState(i) { const l = LV.list[i], run = G.run(); if (run && run.done[l.id]) return 'done'; return G.levelAvailable(i) ? 'avail' : 'fog'; }
-  function selectLevel(p, i) {
+  function selectLevel(p, i, focus) {
     mapSel = i;
     const l = LV.list[i], st = levelState(i), run = G.run(), d = $('.mdetail', p);
     [...$('.mlist', p).children].forEach((c, k) => c.classList.toggle('sel', k === i));
-    if (S.map3d && S.map3d.ok) S.map3d.select(i);
+    // focus 'snap' jumps the chart (opening it), true glides (picking from the list)
+    if (S.map3d && S.map3d.ok) { if (focus) S.map3d.focus(i, focus === 'snap'); else S.map3d.select(i); }
     if (st === 'fog') { d.innerHTML = '<h3>UNDISCOVERED</h3><p>Reconnaissance has not reached this area yet. Win the battles before it to lift the fog.</p>'; const f0 = $('.mfoot', p); if (f0) f0.innerHTML = ''; return; }
     const bossN = l.bossName || ({ bossShip: 'Battleship', bossBomber: 'Heavy bomber', carrier: 'Carrier' })[l.boss];
     const rec = run.done[l.id];

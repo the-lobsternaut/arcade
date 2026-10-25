@@ -268,14 +268,24 @@ export function createMap(S) {
     const next = pins.find((p) => p.st === 'avail') || pins[0];
     if (next) { cam.tx = cam.x = next.pos.x; cam.tz = cam.z = next.pos.z + 0.6; }
     cam.td = cam.dist = 13;
-    if (!raf) raf = requestAnimationFrame(frameLoop);
+    // always restart the loop. The chain clears `raf` at the top of every frame and drops it
+    // entirely if the canvas is off the document, so "only start one if none is running" could
+    // leave the panel showing the frame from the last visit - the chart as it was before the
+    // battle you have just won.
+    stop(); raf = requestAnimationFrame(frameLoop);
   };
   // leaving the map stops the loop and takes the canvas out of the panel - the context stays ours
   M.detach = function () { stop(); ptrs.clear(); if (canvas.parentNode) canvas.parentNode.removeChild(canvas); };
   M.unmount = M.detach;
   M.select = function (i) { selIdx = i; };
-  M.focus = function (i) { const p = pins[i]; if (!p) return; selIdx = i; cam.tx = p.pos.x; cam.tz = p.pos.z + 0.6; cam.td = Math.min(cam.td, 11); };
+  // `snap` jumps the camera instead of gliding - for opening the chart, where a glide would be a
+  // long slide across the Pacific from wherever it was left last time.
+  M.focus = function (i, snap) {
+    const p = pins[i]; if (!p) return;
+    selIdx = i; cam.tx = p.pos.x; cam.tz = p.pos.z + 0.6; cam.td = Math.min(cam.td, 11);
+    if (snap) { cam.x = cam.tx; cam.z = cam.tz; cam.dist = cam.td; }
+  };
   M.isReady = () => ready;
-  M.coords = COORD; M._fog = fogC; M._pins = () => pins;
+  M.coords = COORD; M._fog = fogC; M._pins = () => pins; M._cam = cam;
   return M;
 }

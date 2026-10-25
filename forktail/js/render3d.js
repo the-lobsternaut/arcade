@@ -833,6 +833,52 @@ export function createRenderer(canvas, S) {
     pieces.push(land);
     return pieces;
   }
+  // ---- where the ground actually is
+  // Everything that lies ON the surface - a blast ring, a crater, a splash, the red circle warning
+  // you where a shell is about to land - used to be drawn half a unit above y=0, which was right
+  // while the land was a flat sheet. The land has relief now and rises well above that, so those
+  // decals were being drawn inside the hill and you never saw them: a nuke over Oahu was a column
+  // of smoke with no flash and no shockwave under it.
+  // Asking the polygons for a height per sprite per frame would be a nearest-point search over the
+  // whole coastline every time, so the relief each map already bakes per vertex is splatted once
+  // into a coarse grid and read back from there. The refinement guarantees vertices closer together
+  // than a cell, so taking the highest vertex in each cell gives a surface that sits a touch proud
+  // of the real one - which is the right way to be wrong for something meant to lie on top of it.
+  const HCELL = 10;
+  function buildHeightGrid(t) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, any = false;
+    for (const m of t.pieces) {
+      const d = m.userData; if (!d.el) continue;
+      any = true;
+      for (let i = 0; i < d.mx.length; i++) {
+        if (d.mx[i] < x0) x0 = d.mx[i]; if (d.mx[i] > x1) x1 = d.mx[i];
+        if (d.my[i] < y0) y0 = d.my[i]; if (d.my[i] > y1) y1 = d.my[i];
+      }
+    }
+    if (!any) return null;
+    const gw = Math.max(1, Math.ceil((x1 - x0) / HCELL) + 1), gh = Math.max(1, Math.ceil((y1 - y0) / HCELL) + 1);
+    const a = new Float32Array(gw * gh);
+    for (const m of t.pieces) {
+      const d = m.userData; if (!d.el) continue;
+      for (let i = 0; i < d.mx.length; i++) {
+        const gx = Math.round((d.mx[i] - x0) / HCELL), gy = Math.round((d.my[i] - y0) / HCELL);
+        const k = gy * gw + gx, v = d.lift + d.el[i];
+        if (v > a[k]) a[k] = v;
+      }
+    }
+    return { x0, y0, gw, gh, a };
+  }
+  let curHG = null, curOff = 0, curH = 0;
+  // gx, gy are field coordinates - the same ones every sprite is placed with.
+  function groundY(gx, gy) {
+    const g = curHG; if (!g) return 0;
+    const fx = (gx - g.x0) / HCELL, fy = ((curOff + curH - gy) - g.y0) / HCELL;
+    if (fx < 0 || fy < 0 || fx > g.gw - 1 || fy > g.gh - 1) return 0;
+    const ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
+    const jx = Math.min(ix + 1, g.gw - 1), jy = Math.min(iy + 1, g.gh - 1);
+    const a = g.a, r0 = iy * g.gw, r1 = jy * g.gw;
+    return (a[r0 + ix] * (1 - tx) + a[r0 + jx] * tx) * (1 - ty) + (a[r1 + ix] * (1 - tx) + a[r1 + jx] * tx) * ty;
+  }
   const terrainCache = {};
   function terrainFor(id) {
     if (terrainCache[id] !== undefined) return terrainCache[id];
@@ -842,6 +888,7 @@ export function createRenderer(canvas, S) {
     const rl = M.relief || RELIEF.land, ri = M.isleRelief || RELIEF.isle;
     for (const poly of M.land || []) t.pieces = t.pieces.concat(buildCoast(poly, landMat, 0, rl));
     for (const poly of M.isles || []) t.pieces = t.pieces.concat(buildCoast(poly, isleMat, 10, ri));
+    t.hg = buildHeightGrid(t);
     return (terrainCache[id] = t);
   }
   function drawTerrain(w) {
@@ -851,9 +898,10 @@ export function createRenderer(canvas, S) {
       const o = terrainCache[k];
       if (o && o !== t) for (const m of o.pieces) m.visible = false;
     }
-    if (!t) return;
+    if (!t) { curHG = null; return; }
     // the map slides down the field as the stage scrolls, the same way everything else does
     const off = w.scrollY - t.map.at;
+    curHG = t.hg; curOff = off; curH = w.H;
     drawWrecks(t.map, off, w);
     for (const m of t.pieces) {
       const d = m.userData, mx = d.mx, my = d.my, el = d.el, lift = d.lift;
@@ -1202,13 +1250,13 @@ export function createRenderer(canvas, S) {
       // ---- telegraphed impacts + napalm zones
       for (const wn of w.warns) {
         const u = wn.t / wn.dur;
-        if (wn.friendly) { sprite(ADDFLAT, wn.x, wn.y, 2, wn.r * 2, 1, 0, 1, 0.6, 0.2, 0.25 * u, 2); continue; }
+        if (wn.friendly) { sprite(ADDFLAT, wn.x, wn.y, 2 + groundY(wn.x, wn.y), wn.r * 2, 1, 0, 1, 0.6, 0.2, 0.25 * u, 2); continue; }
         sprite(ADDFLAT, wn.x, wn.y, WARN_ALT, wn.r * 2 * (1.4 - 0.4 * u), 1, 0, 1.0, 0.12, 0.08, 0.45 + 0.5 * u * (0.6 + 0.4 * Math.sin(time * 30)), 6);
         sprite(ADDFLAT, wn.x, wn.y, WARN_ALT, wn.r * 2 * u, 1, 0, 1.0, 0.2, 0.1, 0.18, 2);
       }
       for (const z of w.zones) {
         const u = 1 - z.t / z.dur;
-        sprite(ADDFLAT, z.x, z.y, 1.2, Math.max(z.w, z.h) * 1.1, z.h / Math.max(z.w, z.h) * 1.2, 0, 1.0, 0.45, 0.1, 0.5 * u, 2);
+        sprite(ADDFLAT, z.x, z.y, 1.2 + groundY(z.x, z.y), Math.max(z.w, z.h) * 1.1, z.h / Math.max(z.w, z.h) * 1.2, 0, 1.0, 0.45, 0.1, 0.5 * u, 2);
         if (litN < 3 && u > 0.3) lightAt(litN++, z.x, z.y, 4, 9000 * u, 0xff7a30);
       }
     }
@@ -1223,8 +1271,8 @@ export function createRenderer(canvas, S) {
         }
         case 'flame': sprite(ADD, q.x, q.y, altW, q.s * (0.6 + u * 0.8), 1, u * 4, 1.0, 0.55 + u * 0.3, 0.2, u, 1); break;
         case 'spark': sprite(ADD, q.x, q.y, altW, q.s * 2.4, 1, 0, 1.0, 0.75, 0.4, u, 3); break;
-        case 'splash': if (u <= 1) { sprite(SMOKE, q.x, q.y, altW + 2 + (1 - u) * 8, q.s, 1, q.rot || 0, 0.95, 0.97, 1.0, Math.min(1, u * 1.6) * 0.65, 5); sprite(FLAT, q.x, q.y, 0.3, q.s * (1.6 - u * 0.6), 1, q.rot || 0, 1, 1, 1, u * 0.35, 6); } break;
-        case 'foam': sprite(FLAT, q.x, q.y, 0.25, q.s * (1.9 - u) * 2, 1, q.rot || 0, 1, 1, 1, u * 0.7, 4); break;
+        case 'splash': if (u <= 1) { sprite(SMOKE, q.x, q.y, altW + 2 + (1 - u) * 8, q.s, 1, q.rot || 0, 0.95, 0.97, 1.0, Math.min(1, u * 1.6) * 0.65, 5); sprite(FLAT, q.x, q.y, 0.3 + groundY(q.x, q.y), q.s * (1.6 - u * 0.6), 1, q.rot || 0, 1, 1, 1, u * 0.35, 6); } break;
+        case 'foam': sprite(FLAT, q.x, q.y, 0.25 + groundY(q.x, q.y), q.s * (1.9 - u) * 2, 1, q.rot || 0, 1, 1, 1, u * 0.7, 4); break;
         case 'debris': break; // instanced boxes below
         default: sprite(SMOKE, q.x, q.y, altW, q.s, 1, 0, 0.6, 0.6, 0.6, u * 0.5, 0);
       }
@@ -1248,12 +1296,12 @@ export function createRenderer(canvas, S) {
       if (u < 0.5) sprite(ADD, f.x, f.y, altW + 4, sz * 1.2, 1, f.rot, 1.0, 0.72, 0.34, (0.5 - u) * 0.85, 1);   // heat through it
       if (u < 0.3) sprite(ADD, f.x, f.y, altW + 5, sz * 2.6, 1, 0, 1.0, 0.6, 0.25, (0.3 - u) * 1.5, 2);         // flash
       if (litN < 3 && u < 0.5 && f.s > 8) lightAt(litN++, f.x, f.y, altW, 22000 * (1 - u * 2) * Math.min(2, f.s / 16), 0xffa050);
-      if (f.ground && u < 0.9) sprite(FLAT, f.x, f.y, 0.4, sz * 2.2, 1, f.rot, 0.9, 0.95, 1, (1 - u) * 0.45, 4);
+      if (f.ground && u < 0.9) sprite(FLAT, f.x, f.y, 0.4 + groundY(f.x, f.y), sz * 2.2, 1, f.rot, 0.9, 0.95, 1, (1 - u) * 0.45, 4);
     }
     // ---- nukes: flash, 3D shockwave rings, mushroom cloud
     for (const nk of w.nukes) {
       if (nk.t < 0) continue;
-      const tt = nk.t, R0 = nk.R, altW = (nk.alt || 0) * ALT_K;
+      const tt = nk.t, R0 = nk.R, gY = groundY(nk.x, nk.y), altW = (nk.alt || 0) * ALT_K + gY;
       const g = Math.min(1, tt / 0.3);
       // fireball: white-hot core for a moment, then an orange/red ball that boils into smoke
       const hot = Math.max(0, 1 - tt / 0.35);
@@ -1261,8 +1309,8 @@ export function createRenderer(canvas, S) {
       sprite(ADD, nk.x, nk.y, altW + 7, R0 * 1.3 * g, 1, -nk.rot + tt, 1.0, 0.42, 0.1, Math.max(0, 0.8 - tt / 2.0), 1);
       if (tt < 0.5) sprite(ADD, nk.x, nk.y, altW + 10, R0 * 4 * (0.4 + tt), 1, 0, 1, 0.95, 0.85, (0.5 - tt) * 1.6, 3);
       // scorched, boiling sea + base surge on the water
-      sprite(ADDFLAT, nk.x, nk.y, 0.6, R0 * 2 * Math.min(1.6, tt * 1.5), 1, 0, 1, 0.5, 0.2, Math.max(0, 0.6 - tt * 0.25), 6);
-      if (tt > 0.15) sprite(FLAT, nk.x, nk.y, 0.5, R0 * (1.2 + tt * 0.9), 1, nk.rot, 0.92, 0.95, 1, Math.max(0, 0.5 - tt * 0.11), 4);
+      sprite(ADDFLAT, nk.x, nk.y, 0.6 + gY, R0 * 2 * Math.min(1.6, tt * 1.5), 1, 0, 1, 0.5, 0.2, Math.max(0, 0.6 - tt * 0.25), 6);
+      if (tt > 0.15) sprite(FLAT, nk.x, nk.y, 0.5 + gY, R0 * (1.2 + tt * 0.9), 1, nk.rot, 0.92, 0.95, 1, Math.max(0, 0.5 - tt * 0.11), 4);
       // shock shell: a hemisphere thrown out ahead of the fireball, with the surface ring it
       // drags across the water under it. Two of them, the second a beat behind, so the blast has
       // a leading wall and a trailing one instead of one lonely hoop.
