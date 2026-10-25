@@ -549,58 +549,101 @@ export function createRenderer(canvas, S) {
   // A map is polygons in playfield coordinates. Triangulate once there, then map the vertices
   // through the camera every frame: the coast lands exactly where the gameplay says it does, at
   // any tilt, and a ship moored off a point stays off that point.
-  // What makes an island read as a photograph rather than a polygon is almost entirely its edge:
-  // white surf, then a band of sand, then turquoise shallows shelving into deep water, with
-  // mottled ground behind it. Flat fill with a little noise on it will always look like a map.
-  // So each coast is drawn three times - surf ring, shallows ring, then the land - each one the
-  // same polygon pushed outward along its vertex normals, and the land itself carries a tiling
-  // aerial texture sampled by world position so it does not swim as the map scrolls.
+  //
+  // Two things have to be true for it to read as land rather than as a hole cut in the sea.
+  //
+  // One: the picture has to be pinned to the ground, not to the screen. Every vertex carries the
+  // playfield coordinate it came from, and the aerial texture is sampled by that - so a field is
+  // the same field as it scrolls past, and flying over the island moves you over the island
+  // instead of wiping a stencil across a stationary pattern.
+  //
+  // Two: the ground has to have a height. The land is a real surface here, lifted by a height
+  // field keyed to distance from its own shoreline, so the shore is flat, the interior rises, and
+  // the sun shades the slopes it actually falls on. Relief is what makes a near-vertical view read
+  // as terrain - it is why a relief map is hillshaded and a political map is not.
+  //
+  // What makes the edge read is almost entirely the water: white surf, a band of sand, turquoise
+  // shallows shelving into deep water. So each coast is four rings under the land, each one the
+  // same polygon pushed outward along its vertex normals.
+  //
   // The game already ships photographs of islands from the air. The middle of one of them is
   // exactly the ground texture this wants - real vegetation, real cleared land, real colour
   // relationships - so take a square out of the centre (well inside the alpha edge) and
   // mirror-tile it so the joins do not show. Nothing hand-painted gets close.
-  const groundC = document.createElement('canvas'); groundC.width = groundC.height = 512;
-  const groundTex = new THREE.CanvasTexture(groundC);
-  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
-  groundTex.colorSpace = THREE.SRGBColorSpace;
-  {
-    const g = groundC.getContext('2d');
-    g.fillStyle = '#2d3a20'; g.fillRect(0, 0, 512, 512);          // until the photo lands
-    imgLoad('assets/island3.webp').then((im) => {
-      if (!im) return;
-      // a square from the middle, inset so no transparent coastline comes with it
-      const side = Math.min(im.width, im.height) * 0.34;
-      const sx = (im.width - side) / 2, sy = (im.height - side) / 2;
-      g.save();
-      g.drawImage(im, sx, sy, side, side, 0, 0, 256, 256);        // top-left quarter
-      g.translate(512, 0); g.scale(-1, 1); g.drawImage(groundC, 0, 0, 256, 256, 0, 0, 256, 256);
-      g.restore();
-      g.save(); g.translate(0, 512); g.scale(1, -1);
-      g.drawImage(groundC, 0, 0, 512, 256, 0, 0, 512, 256);        // mirror the whole top half down
-      g.restore();
-      groundTex.needsUpdate = true;
-    });
+  // Mirror-tiling a crop makes the joins vanish and replaces them with something worse: a
+  // kaleidoscope motif repeating on a grid, which the eye finds instantly. This wraps the crop
+  // instead. Shift it half a tile along one axis and cross-fade the two with a ramp that is zero
+  // at both edges, and the tile's two edges end up sampling the same pixels - seamless, with no
+  // symmetry anywhere in it. Once along x, once along y.
+  function wrapAxis(src, N, horiz) {
+    const base = document.createElement('canvas'); base.width = base.height = N;
+    const bg = base.getContext('2d'), h = N / 2;
+    if (horiz) { bg.drawImage(src, h, 0, h, N, 0, 0, h, N); bg.drawImage(src, 0, 0, h, N, h, 0, h, N); }
+    else { bg.drawImage(src, 0, h, N, h, 0, 0, N, h); bg.drawImage(src, 0, 0, N, h, 0, h, N, h); }
+    const top = document.createElement('canvas'); top.width = top.height = N;
+    const tg = top.getContext('2d');
+    tg.drawImage(src, 0, 0);
+    tg.globalCompositeOperation = 'destination-in';
+    const grad = horiz ? tg.createLinearGradient(0, 0, N, 0) : tg.createLinearGradient(0, 0, 0, N);
+    grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    tg.fillStyle = grad; tg.fillRect(0, 0, N, N);
+    bg.drawImage(top, 0, 0);
+    return base;
   }
-  // One mirror-tiled photograph repeats as a very obvious butterfly. Sample it twice instead, at
-  // scales and rotations that share no common multiple, and mix: the two patterns cancel each
-  // other out and what is left reads as ground rather than wallpaper.
-  function groundMat(scale, tint) {
+  // The game already ships photographs of islands from the air. The middle of one is exactly the
+  // ground texture this wants - real vegetation, real cleared land, real colour relationships - so
+  // take as large a square as stays clear of the alpha edge (a small crop blown up is what turns
+  // vegetation into brush strokes) and wrap it.
+  function groundTile(url, fallback) {
+    const N = 512;
+    const c = document.createElement('canvas'); c.width = c.height = N;
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    const g = c.getContext('2d');
+    g.fillStyle = fallback; g.fillRect(0, 0, N, N);              // until the photo lands
+    imgLoad(url).then((im) => {
+      if (!im) return;
+      const side = Math.min(im.width, im.height) * 0.46;
+      const sx = (im.width - side) / 2, sy = (im.height - side) / 2;
+      const crop = document.createElement('canvas'); crop.width = crop.height = N;
+      crop.getContext('2d').drawImage(im, sx, sy, side, side, 0, 0, N, N);
+      g.drawImage(wrapAxis(wrapAxis(crop, N, true), N, false), 0, 0);
+      t.needsUpdate = true;
+    });
+    return t;
+  }
+  const groundA = groundTile('assets/island3.webp', '#2d3a20');
+  const groundB = groundTile('assets/island1.webp', '#30381d');
+  // Even a seamless tile still repeats. Sample two different islands three times between them, at
+  // scales and rotations sharing no common multiple, and average: no one sample's grid survives
+  // the other two. Averaging costs contrast, so put it back afterwards rather than letting one
+  // sample dominate - a dominant sample brings its own repeat back with it. All of it is sampled
+  // in playfield coordinates, so the ground belongs to the land and not to the screen, and high
+  // ground is drier than the valleys, so tint it by elevation as well.
+  function groundMat(scale, lo, hi) {
     const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.96, metalness: 0, fog: false });
-    const w = vec2(positionWorld.x, positionWorld.z);
-    const rot = (v, a) => { const c = Math.cos(a), s2 = Math.sin(a);
+    const w = attribute('mapxy', 'vec2').mul(scale);
+    const rot = (v, a, k) => { const c = Math.cos(a) * k, s2 = Math.sin(a) * k;
       return vec2(v.x.mul(c).sub(v.y.mul(s2)), v.x.mul(s2).add(v.y.mul(c))); };
-    const c1 = texture(groundTex, rot(w, 0.0).mul(scale)).rgb;
-    const c2 = texture(groundTex, rot(w, 1.19).mul(scale * 0.413)).rgb;
-    const c3 = texture(groundTex, rot(w, 2.41).mul(scale * 1.77)).rgb;
-    m.colorNode = mix(mix(c1, c2, 0.5), c3, 0.26).mul(vec3(tint[0], tint[1], tint[2]));
+    const c1 = texture(groundA, rot(w, 0.0, 1.0)).rgb;
+    const c2 = texture(groundB, rot(w, 1.19, 0.413)).rgb;
+    const c3 = texture(groundA, rot(w, 2.41, 1.77)).rgb;
+    const avg = mix(mix(c1, c2, 0.5), c3, 0.33);
+    // around the photograph's own mean, and in the linear values texture() hands back - this
+    // ground sits near 0.05 linear, so pivoting at mid-grey would drive all of it to black
+    const punch = avg.sub(vec3(0.055, 0.055, 0.055)).mul(1.3).add(vec3(0.055, 0.055, 0.055));
+    const up = smoothstep(0.1, 0.78, attribute('elev', 'float'));
+    m.colorNode = punch.mul(mix(vec3(lo[0], lo[1], lo[2]), vec3(hi[0], hi[1], hi[2]), up));
     return m;
   }
-  const landMat = groundMat(0.0021, [0.92, 0.95, 0.84]);
-  const isleMat = groundMat(0.0052, [0.98, 1.0, 0.88]);
+  const landMat = groundMat(0.0125, [1.12, 1.02, 0.66], [0.70, 0.86, 0.56]);
+  const isleMat = groundMat(0.0240, [1.10, 1.08, 0.86], [1.00, 1.02, 0.90]);
   const deepMat = new THREE.MeshBasicNodeMaterial({ color: 0x3f7f96, transparent: true, opacity: 0.34, depthWrite: false });
   const shelfMat = new THREE.MeshBasicNodeMaterial({ color: 0x6fb9ba, transparent: true, opacity: 0.46, depthWrite: false });
   const surfMat = new THREE.MeshBasicNodeMaterial({ color: 0xdceee8, transparent: true, opacity: 0.62, depthWrite: false });
   const sandMat = new THREE.MeshBasicNodeMaterial({ color: 0xd9cb9f, transparent: true, opacity: 0.9, depthWrite: false });
+
   // Push a polygon outward along each vertex's angle bisector. Good enough for a coast: the
   // offsets are small next to the features, so the concave bits (the lochs) do not fold over.
   function offsetPoly(poly, d) {
@@ -617,16 +660,156 @@ export function createRenderer(canvas, S) {
     }
     return out;
   }
-  function buildPiece(poly, mat, order) {
-    const pts = poly.map((q) => new THREE.Vector2(q[0], q[1]));
-    const idx = THREE.ShapeUtils.triangulateShape(pts, []);
+  // ---- the height field -------------------------------------------------------------
+  // Elevation is distance from this landmass's own shoreline, ramped over `rise` units and then
+  // rolling with fractal noise: a flat beach, ground climbing behind it, ridges and valleys
+  // inland. Heights are game altitude units, the same ones the aircraft fly in, so a ridge is
+  // honestly a fraction of your height above it.
+  //
+  // `exag` is vertical exaggeration, and it applies to the shading only, never to the shape. Every
+  // relief map ever printed does this: at the scale a map is read, true slopes are too gentle to
+  // see, so the hillshade is computed from a surface several times taller than the real one while
+  // the heights stay honest. Here it also means the terrain can read as mountainous without ever
+  // climbing far enough to swallow an aircraft.
+  const RELIEF = { land: { h: 15, rise: 30, freq: 0.016, step: 12, exag: 3.2 },
+                   isle: { h: 1.4, rise: 9, freq: 0.05, step: 9, exag: 3.2 } };
+  const WPG = 1.14;      // world units per playfield unit across the field; near enough for lighting
+  function vhash(xi, yi) { const s = Math.sin(xi * 127.1 + yi * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function vnoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = vhash(xi, yi), b = vhash(xi + 1, yi), c = vhash(xi, yi + 1), d = vhash(xi + 1, yi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+  // three octaves, no more: the finest one has to stay coarser than the vertex spacing below,
+  // or the "hills" are only the sampling error of a field nobody can see
+  function fbm(x, y) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < 3; i++) { s += a * vnoise(x * f, y * f); a *= 0.5; f *= 2; } return s / 0.875; }
+  // Nearest point on the ring, and with it the direction the distance grows in - which is the
+  // gradient of the coastal ramp, so the slope near a shore falls out of the same search.
+  const NP = { d: 0, gx: 0, gy: 0 };
+  function nearPoly(poly, x, y) {
+    let best = Infinity, bx = 0, by = 0;
+    for (let i = 0, n = poly.length; i < n; i++) {
+      const a = poly[i], b = poly[(i + 1) % n];
+      const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+      let t = L ? ((x - a[0]) * dx + (y - a[1]) * dy) / L : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = a[0] + dx * t, py = a[1] + dy * t;
+      const d = (px - x) * (px - x) + (py - y) * (py - y);
+      if (d < best) { best = d; bx = px; by = py; }
+    }
+    NP.d = Math.sqrt(best);
+    if (NP.d > 1e-6) { NP.gx = (x - bx) / NP.d; NP.gy = (y - by) / NP.d; } else { NP.gx = NP.gy = 0; }
+    return NP;
+  }
+  const sstep = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+  const dsstep = (u) => (u <= 0 || u >= 1 ? 0 : 6 * u * (1 - u));
+  // height and its two slopes at once. The noise contributes through its own finite difference,
+  // the shore ramp through the distance gradient above, so this costs one search and three noise
+  // lookups instead of three searches.
+  const RL = { h: 0, hx: 0, hy: 0 };
+  function reliefAt(poly, rel, x, y) {
+    nearPoly(poly, x, y);
+    const u = NP.d / rel.rise, R = sstep(u), dR = dsstep(u) / rel.rise;
+    const f = rel.freq, e = 2.0;
+    const n0 = fbm(x * f, y * f), N = 0.26 + 0.74 * n0 * n0;
+    const n1 = fbm((x + e) * f, y * f), n2 = fbm(x * f, (y + e) * f);
+    const Nx = (0.26 + 0.74 * n1 * n1 - N) / e, Ny = (0.26 + 0.74 * n2 * n2 - N) / e;
+    RL.h = rel.h * R * N;
+    RL.hx = rel.h * (dR * NP.gx * N + R * Nx);
+    RL.hy = rel.h * (dR * NP.gy * N + R * Ny);
+    return RL;
+  }
+
+  // Earcut gives a triangulation whose every vertex sits on the shoreline, which is a flat sheet
+  // however good the height field is: there is nothing in the interior to lift. So refine it until
+  // no edge is longer than `target`, which is the spacing the relief needs to be sampled at.
+  //
+  // Uniform splitting would spend its whole budget on the dense coastline and still leave the
+  // inland triangles hundreds of units across - and a height field sampled coarser than its own
+  // features turns into spikes, not hills. This splits edges, not triangles: an edge too long gets
+  // a midpoint, and a triangle is then rebuilt from however many of its edges were split (red-green
+  // refinement). Midpoints are keyed by edge, so the two triangles sharing one agree about it and
+  // no crack can open. Boundary midpoints are collinear, so the coast is untouched.
+  function refine(pts, tris, target, maxIter, budget) {
+    const t2 = target * target;
+    const key = (i, j) => (i < j ? i + ',' + j : j + ',' + i);
+    // the budget is checked as midpoints are made, not only between passes: one pass of a large
+    // map can triple the mesh, and a check at the top of the loop finds out far too late
+    for (let it = 0; it < maxIter && pts.length < budget; it++) {
+      const mid = new Map();
+      for (let k = 0; k < tris.length; k += 3)
+        for (let e = 0; e < 3; e++) {
+          const i = tris[k + e], j = tris[k + (e + 1) % 3];
+          const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+          if (dx * dx + dy * dy <= t2) continue;
+          const kk = key(i, j);
+          if (!mid.has(kk) && pts.length < budget) { mid.set(kk, pts.length); pts.push([(pts[i][0] + pts[j][0]) / 2, (pts[i][1] + pts[j][1]) / 2]); }
+        }
+      if (!mid.size) break;
+      const out = [];
+      for (let k = 0; k < tris.length; k += 3) {
+        const a = tris[k], b = tris[k + 1], c = tris[k + 2];
+        const ab = mid.get(key(a, b)), bc = mid.get(key(b, c)), ca = mid.get(key(c, a));
+        const n = (ab === undefined ? 0 : 1) + (bc === undefined ? 0 : 1) + (ca === undefined ? 0 : 1);
+        if (n === 0) out.push(a, b, c);
+        else if (n === 3) out.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+        else if (n === 1) {
+          if (ab !== undefined) out.push(a, ab, c, ab, b, c);
+          else if (bc !== undefined) out.push(b, bc, a, bc, c, a);
+          else out.push(c, ca, b, ca, a, b);
+        } else if (ab === undefined) out.push(c, ca, bc, ca, a, b, ca, b, bc);
+        else if (bc === undefined) out.push(a, ab, ca, ab, b, c, ab, c, ca);
+        else out.push(b, bc, ab, bc, c, a, bc, a, ab);
+      }
+      tris = out;
+    }
+    return tris;
+  }
+
+  // A piece is one filled ring. `rel` lifts it into terrain; without it the piece is water and
+  // stays flat. Positions are rewritten every frame, so the buffer starts empty and the map
+  // coordinate each vertex came from is what is actually kept.
+  function buildPiece(poly, mat, order, rel) {
+    let pts = poly.map((q) => [q[0], q[1]]);
+    let tris = THREE.ShapeUtils.triangulateShape(pts.map((q) => new THREE.Vector2(q[0], q[1])), []).flat();
+    if (rel) tris = refine(pts, tris, rel.step, 8, 16000);
+    const n = pts.length;
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts.length * 3), 3));
-    g.setIndex(idx.flat());
-    g.computeVertexNormals();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    g.setIndex(tris);
+    const mx = new Float32Array(n), my = new Float32Array(n);
+    for (let i = 0; i < n; i++) { mx[i] = pts[i][0]; my[i] = pts[i][1]; }
+    // Normals are baked here and never touched again. The surface's shape in playfield coordinates
+    // does not change - only where the camera puts it - so recomputing normals every frame would
+    // be thousands of cross products a frame to arrive back at these numbers. Playfield +x is world
+    // +x and playfield +y is world -z, which is the whole of the rotation.
+    const nrm = new Float32Array(n * 3);
+    let el = null;
+    if (rel) {
+      el = new Float32Array(n);
+      const up = new Float32Array(n);
+      const k = (ALT_K / WPG) * rel.exag;
+      for (let i = 0; i < n; i++) {
+        const r = reliefAt(poly, rel, mx[i], my[i]);
+        el[i] = r.h * ALT_K;
+        up[i] = r.h / rel.h;
+        const ax = -r.hx * k, az = r.hy * k, L = Math.hypot(ax, 1, az);
+        nrm[i * 3] = ax / L; nrm[i * 3 + 1] = 1 / L; nrm[i * 3 + 2] = az / L;
+      }
+      const a = new Float32Array(n * 2);
+      for (let i = 0; i < n; i++) { a[i * 2] = mx[i]; a[i * 2 + 1] = my[i]; }
+      g.setAttribute('mapxy', new THREE.BufferAttribute(a, 2));
+      g.setAttribute('elev', new THREE.BufferAttribute(up, 1));
+    } else {
+      for (let i = 0; i < n; i++) nrm[i * 3 + 1] = 1;         // water: flat, and unlit anyway
+    }
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
     const m = new THREE.Mesh(g, mat);
-    m.frustumCulled = false; m.receiveShadow = true; m.renderOrder = order;
-    m.userData.pts = pts;
+    m.frustumCulled = false; m.receiveShadow = true; m.castShadow = !!rel; m.renderOrder = order;
+    let y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < n; i++) { if (my[i] < y0) y0 = my[i]; if (my[i] > y1) y1 = my[i]; }
+    m.userData = { mx, my, el, lift: 0, y0, y1 };
     scene.add(m); m.visible = false;
     return m;
   }
@@ -638,14 +821,14 @@ export function createRenderer(canvas, S) {
     { d: 1.5, mat: () => surfMat, order: -7, y: 0.24 },
     { d: 0.7, mat: () => sandMat, order: -6, y: 0.30 },
   ];
-  function buildCoast(poly, landM, baseOrder) {
+  function buildCoast(poly, landM, baseOrder, rel) {
     const pieces = [];
     for (const c of COAST) {
-      const m = buildPiece(offsetPoly(poly, c.d), c.mat(), baseOrder + c.order);
+      const m = buildPiece(offsetPoly(poly, c.d), c.mat(), baseOrder + c.order, null);
       m.userData.lift = c.y;
       pieces.push(m);
     }
-    const land = buildPiece(poly, landM, baseOrder);
+    const land = buildPiece(poly, landM, baseOrder, rel);
     land.userData.lift = 0.36;
     pieces.push(land);
     return pieces;
@@ -656,11 +839,11 @@ export function createRenderer(canvas, S) {
     const M = mapFor(id);
     if (!M) return (terrainCache[id] = null);
     const t = { map: M, pieces: [] };
-    for (const poly of M.land || []) t.pieces = t.pieces.concat(buildCoast(poly, landMat, 0));
-    for (const poly of M.isles || []) t.pieces = t.pieces.concat(buildCoast(poly, isleMat, 10));
+    const rl = M.relief || RELIEF.land, ri = M.isleRelief || RELIEF.isle;
+    for (const poly of M.land || []) t.pieces = t.pieces.concat(buildCoast(poly, landMat, 0, rl));
+    for (const poly of M.isles || []) t.pieces = t.pieces.concat(buildCoast(poly, isleMat, 10, ri));
     return (terrainCache[id] = t);
   }
-  const terrPt = new THREE.Vector3();
   function drawTerrain(w) {
     const L = w.level;
     const t = L ? terrainFor(L.id) : null;
@@ -673,16 +856,19 @@ export function createRenderer(canvas, S) {
     const off = w.scrollY - t.map.at;
     drawWrecks(t.map, off, w);
     for (const m of t.pieces) {
-      const pts = m.userData.pts, pos = m.geometry.attributes.position.array, lift = m.userData.lift;
-      let onScreen = false;
-      for (let i = 0; i < pts.length; i++) {
-        const gy = off - pts[i].y + w.H;       // playfield y runs north; the field scrolls south
-        ray(pts[i].x, gy, 0);
-        pos[i * 3] = P.x; pos[i * 3 + 1] = lift; pos[i * 3 + 2] = P.z;
-        if (gy > -400 && gy < w.H + 400) onScreen = true;
+      const d = m.userData, mx = d.mx, my = d.my, el = d.el, lift = d.lift;
+      // Decide from the piece's own extent before touching a vertex: a map is tens of thousands of
+      // points and it is off the field for most of a stage. The test is against the span, not
+      // against individual corners, because a piece larger than the screen has every corner off it
+      // and still covers the view. Playfield y runs north; the field scrolls south.
+      m.visible = off - d.y0 + w.H > -400 && off - d.y1 + w.H < w.H + 400;
+      if (!m.visible) continue;
+      const pos = m.geometry.attributes.position.array;
+      for (let i = 0; i < mx.length; i++) {
+        ray(mx[i], off - my[i] + w.H, 0);
+        pos[i * 3] = P.x; pos[i * 3 + 1] = lift + (el ? el[i] : 0); pos[i * 3 + 2] = P.z;
       }
-      m.visible = onScreen;
-      if (onScreen) { m.geometry.attributes.position.needsUpdate = true; m.geometry.computeVertexNormals(); }
+      m.geometry.attributes.position.needsUpdate = true;
     }
   }
   // Ships burning at their moorings. They are not targets - they are yours, and they were hit

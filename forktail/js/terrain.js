@@ -11,6 +11,13 @@
 
    `at` is the scroll distance when the map's y=0 crosses the bottom of the screen.
 
+   A map's last few points close it off far inland - a straight run across the top of the polygon.
+   That edge is not a coast, and the stage currently outscrolls it. Extending it is not just a
+   bigger number: every vertex is mapped through the camera each frame, and one far enough above
+   the screen projects past the horizon, where the cast has no answer and the triangles tear. A map
+   that reaches well beyond the field needs its pieces split into bands so only the ones near the
+   field are transformed at all - that is the next thing to build here, before the other battles.
+
    The coastlines are real. They come from OpenStreetMap's natural=coastline ways, stitched into
    runs, projected into playfield units (about 33 m each, aspect preserved) and simplified with
    Douglas-Peucker. tools/coastline.py does the whole fetch-and-convert, so another battle is one
