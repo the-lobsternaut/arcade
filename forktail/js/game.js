@@ -145,7 +145,9 @@ window.SKY = window.SKY || {};
   function nIslands() { return META.islands ? META.islands.length : 3; }
   function seedScenery() {
     islands.length = clouds.length = 0;
-    for (let i = 0; i < 2; i++) islands.push({ v: (Math.random() * nIslands()) | 0, x: rand(20, W - 20), y: rand(60, H - 60), f: Math.random() < 0.5, id: gid++ });
+    // a level with a real coastline brings its own scenery
+    const Lv = curLevel();
+    if (!(Lv && Lv.map)) for (let i = 0; i < 2; i++) islands.push({ v: (Math.random() * nIslands()) | 0, x: rand(20, W - 20), y: rand(60, H - 60), f: Math.random() < 0.5, id: gid++ });
     for (let i = 0; i < 3; i++) clouds.push(mkCloud(false, rand(0, H)));
     clouds.push(mkCloud(true, rand(0, H * 0.6)));
   }
@@ -1096,7 +1098,9 @@ window.SKY = window.SKY || {};
     for (const i of islands) i.y += SCROLL * dt;
     sweep(islands, (i) => i.y > H + 110);
     nextIsland -= dt;
-    const L = curLevel(), dens = L && L.theme ? (L.theme.islands === undefined ? 1 : L.theme.islands) : 1;
+    // A level with a real coastline has its scenery already; dropping random islands on top of
+    // Pearl Harbor is how you get an atoll in the middle of the East Loch.
+    const L = curLevel(), dens = L && L.map ? 0 : (L && L.theme ? (L.theme.islands === undefined ? 1 : L.theme.islands) : 1);
     if (nextIsland <= 0) { nextIsland = rand(8, 15) / Math.max(0.2, dens); if (dens > 0) { const v = (Math.random() * nIslands()) | 0; islands.push({ v, x: rand(0, W), y: -70, f: Math.random() < 0.5, id: gid++, rot: rand(TAU) }); } }
     for (const c of clouds) c.y += c.sp * dt;
     sweep(clouds, (c) => c.y > H + 140);

@@ -4,7 +4,8 @@
    and parallax are fully 3D. No per-frame allocations: pooled meshes, instanced particles, preallocated scratch. */
 import * as THREE from './vendor/three.webgpu.min.js';
 import { SkyMesh } from './vendor/SkyMesh.js';
-import { Fn, attribute, uniform, texture, vec2, vec3, vec4, float, uv, positionGeometry, materialColor,
+import { mapFor } from './terrain.js';
+import { Fn, attribute, uniform, texture, vec2, vec3, vec4, float, uv, positionGeometry, positionWorld, materialColor,
          mix, sin, cos, floor, fract, smoothstep, step, dot, normalize, normalMap, normalView, positionViewDirection } from './vendor/three.tsl.min.js';
 
 const TAU = Math.PI * 2;
@@ -544,6 +545,99 @@ export function createRenderer(canvas, S) {
   const turretPools = { big: meshPool(() => { const M = MODELS.turretBig, m = new THREE.Mesh(M.geo, dmgClone(M.mat)); m.castShadow = true; scene.remove(m); return m; }), small: meshPool(() => { const M = MODELS.turretSmall, m = new THREE.Mesh(M.geo, dmgClone(M.mat)); m.castShadow = true; scene.remove(m); return m; }) };
   const elevMat = new THREE.MeshStandardMaterial({ color: 0x5a5448, roughness: 0.8 }), elevDead = new THREE.MeshStandardMaterial({ color: 0x15110e, roughness: 1, emissive: 0x401000, emissiveIntensity: 0.6 });
   const elevGeo = new THREE.BoxGeometry(1, 0.6, 1);
+  // ---------------------------------------------------------------- real coastlines
+  // A map is polygons in playfield coordinates. Triangulate once there, then map the vertices
+  // through the camera every frame: the coast lands exactly where the gameplay says it does, at
+  // any tilt, and a ship moored off a point stays off that point.
+  // Flat-coloured land reads as a polygon, not as ground. Break it up with the same two-octave
+  // value noise the sea uses, keyed off world position so it does not swim when the map scrolls.
+  function groundMat(a, b, scale) {
+    const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 });
+    const h21 = Fn(([q]) => fract(sin(dot(q, vec2(127.1, 311.7))).mul(43758.5453)));
+    const vn = Fn(([q]) => {
+      const i = floor(q), f = fract(q).toVar();
+      f.assign(f.mul(f).mul(float(3).sub(f.mul(2))));
+      return mix(mix(h21(i), h21(i.add(vec2(1, 0))), f.x), mix(h21(i.add(vec2(0, 1))), h21(i.add(vec2(1, 1))), f.x), f.y);
+    });
+    const q = vec2(positionWorld.x, positionWorld.z).mul(scale);
+    const n = vn(q).mul(0.62).add(vn(q.mul(3.7)).mul(0.38));
+    m.colorNode = mix(vec3(a[0], a[1], a[2]), vec3(b[0], b[1], b[2]), n);
+    return m;
+  }
+  const landMat = groundMat([0.13, 0.17, 0.08], [0.27, 0.31, 0.15], 0.011);
+  const isleMat = groundMat([0.16, 0.21, 0.10], [0.31, 0.35, 0.18], 0.022);
+  function buildPiece(poly, mat, order) {
+    const pts = poly.map((q) => new THREE.Vector2(q[0], q[1]));
+    const idx = THREE.ShapeUtils.triangulateShape(pts, []);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts.length * 3), 3));
+    g.setIndex(idx.flat());
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat);
+    m.frustumCulled = false; m.receiveShadow = true; m.renderOrder = order;
+    m.userData.pts = pts;
+    scene.add(m); m.visible = false;
+    return m;
+  }
+  const terrainCache = {};
+  function terrainFor(id) {
+    if (terrainCache[id] !== undefined) return terrainCache[id];
+    const M = mapFor(id);
+    if (!M) return (terrainCache[id] = null);
+    const t = { map: M, land: (M.land || []).map((p) => buildPiece(p, landMat, -6)),
+                isles: (M.isles || []).map((p) => buildPiece(p, isleMat, -5)) };
+    return (terrainCache[id] = t);
+  }
+  const terrPt = new THREE.Vector3();
+  function drawTerrain(w) {
+    const L = w.level;
+    const t = L ? terrainFor(L.id) : null;
+    for (const k in terrainCache) {
+      const o = terrainCache[k];
+      if (o && o !== t) { for (const m of o.land.concat(o.isles)) m.visible = false; }
+    }
+    if (!t) return;
+    // the map slides down the field as the stage scrolls, the same way everything else does
+    const off = w.scrollY - t.map.at;
+    drawWrecks(t.map, off, w);
+    for (const m of t.land.concat(t.isles)) {
+      const pts = m.userData.pts, pos = m.geometry.attributes.position.array;
+      let onScreen = false;
+      for (let i = 0; i < pts.length; i++) {
+        const gy = off - pts[i].y + w.H;       // playfield y runs north; the field scrolls south
+        ray(pts[i].x, gy, 0);
+        pos[i * 3] = P.x; pos[i * 3 + 1] = 0.35; pos[i * 3 + 2] = P.z;
+        if (gy > -400 && gy < w.H + 400) onScreen = true;
+      }
+      m.visible = onScreen;
+      if (onScreen) { m.geometry.attributes.position.needsUpdate = true; m.geometry.computeVertexNormals(); }
+    }
+  }
+  // Ships burning at their moorings. They are not targets - they are yours, and they were hit
+  // before you got airborne. A dark hull, fire at the waterline and a smoke column leaning with
+  // the wind, so the harbour is already a casualty when you arrive over it.
+  function drawWrecks(M, off, w) {
+    if (!M.wrecks) return;
+    const time = w.time;
+    for (let i = 0; i < M.wrecks.length; i++) {
+      const k = M.wrecks[i];
+      const gy = off - k.y + w.H;
+      if (gy < -120 || gy > w.H + 120) continue;
+      const seed = i * 2.7;
+      sprite(SMOKE, k.x, gy, 1.0, 26 * k.s, 0.42, k.a, 0.18, 0.17, 0.16, 0.95, 0);     // the hull
+      sprite(ADD, k.x, gy, 2.5, 13 * k.s, 1, 0, 1.0, 0.52, 0.16, 0.5 + Math.sin(time * 7 + seed) * 0.18, 1);
+      // the column: older puffs higher, wider and greyer, drifting downwind
+      for (let j = 0; j < 7; j++) {
+        const u = (time * 0.22 + j / 7 + seed) % 1;
+        const rise = u * 120, wob = Math.sin(time * 0.7 + j * 1.7 + seed) * 7;
+        sprite(SMOKE, k.x + wob + u * 16, gy - u * 7, 3 + rise, (16 + u * 42) * k.s, 1,
+               u * 3 + seed, 0.26 - u * 0.08, 0.25 - u * 0.08, 0.24 - u * 0.07, (1 - u) * 0.8, 0);
+      }
+      if (litN < 3 && i === 1) lightAt(litN++, k.x, gy, 10, 2600, 0xff7a2e);
+    }
+  }
+  R.terrainFor = terrainFor;
+
   // islands
   const islandPool = [0, 1, 2].map((i) => meshPool(() => { const M = MODELS['island' + i]; const m = new THREE.Mesh(M.geo, M.mat); m.receiveShadow = true; m.castShadow = true; m.renderOrder = -5; return m; }));
   // clouds: 3 stacked soft layers each, cast shadows
@@ -735,6 +829,8 @@ export function createRenderer(canvas, S) {
     for (const p of islandPool) p.reset();
     for (const p of cloudPools) p.reset(); bombPool.reset(); torpPool.reset(); ringPool.reset(); shockPool.reset(); mushPool.reset(); turretPools.big.reset(); turretPools.small.reset();
     const shipPool = SHIPPOOL;
+
+    drawTerrain(w);
 
     // ---- islands
     for (const is of w.islands) { const v = is.v % 3; const m = islandPool[v].get(); placeObj(m, is.x, is.y, 0.5); m.rotation.set(0, is.f ? Math.PI : 0, 0); }

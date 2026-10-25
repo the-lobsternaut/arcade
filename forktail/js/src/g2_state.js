@@ -67,7 +67,9 @@
   function nIslands() { return META.islands ? META.islands.length : 3; }
   function seedScenery() {
     islands.length = clouds.length = 0;
-    for (let i = 0; i < 2; i++) islands.push({ v: (Math.random() * nIslands()) | 0, x: rand(20, W - 20), y: rand(60, H - 60), f: Math.random() < 0.5, id: gid++ });
+    // a level with a real coastline brings its own scenery
+    const Lv = curLevel();
+    if (!(Lv && Lv.map)) for (let i = 0; i < 2; i++) islands.push({ v: (Math.random() * nIslands()) | 0, x: rand(20, W - 20), y: rand(60, H - 60), f: Math.random() < 0.5, id: gid++ });
     for (let i = 0; i < 3; i++) clouds.push(mkCloud(false, rand(0, H)));
     clouds.push(mkCloud(true, rand(0, H * 0.6)));
   }
