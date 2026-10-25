@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070914">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tetris">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<meta name="description" content="Tetris rendered in 3D with three.js. SRS rotation, hold, ghost piece, touch controls.">
+<title>Tetris</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='9' width='9' height='9' rx='2' fill='%23b25cff'/%3E%3Crect x='11.5' y='9' width='9' height='9' rx='2' fill='%23b25cff'/%3E%3Crect x='21' y='9' width='9' height='9' rx='2' fill='%23b25cff'/%3E%3Crect x='11.5' y='18.5' width='9' height='9' rx='2' fill='%23b25cff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside class="panel left">
+    <h1 class="logo">TETRIS</h1>
+    <button class="card hold-card" id="holdBtn" type="button" aria-label="Hold piece">
+      <span class="label">Hold</span>
+      <canvas id="holdCanvas" class="preview"></canvas>
+    </button>
+    <div class="card stats">
+      <div class="stat"><span class="label">Score</span><span id="score" class="value">0</span></div>
+      <div class="stat"><span class="label">Best</span><span id="best" class="value">0</span></div>
+      <div class="stat"><span class="label">Level</span><span id="level" class="value">1</span></div>
+      <div class="stat"><span class="label">Lines</span><span id="lines" class="value">0</span></div>
+    </div>
+    <div class="card keys desktop-only">
+      <span class="label">Controls</span>
+      <ul>
+        <li><kbd>←</kbd><kbd>→</kbd> Move</li>
+        <li><kbd>↓</kbd> Soft drop</li>
+        <li><kbd>Space</kbd> Hard drop</li>
+        <li><kbd>↑</kbd><kbd>X</kbd> Rotate ⟳</li>
+        <li><kbd>Z</kbd> Rotate ⟲</li>
+        <li><kbd>C</kbd><kbd>Shift</kbd> Hold</li>
+        <li><kbd>P</kbd><kbd>Esc</kbd> Pause</li>
+        <li><kbd>V</kbd> Camera preset</li>
+        <li><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> Orbit camera</li>
+        <li><kbd>=</kbd><kbd>-</kbd> Zoom · <kbd>R</kbd><kbd>0</kbd> Reset</li>
+        <li class="small">Right/middle/Alt-drag orbit · wheel zoom</li>
+        <li><kbd>M</kbd> Sound</li>
+        <li class="fs-key"><kbd>F</kbd> Full screen</li>
+      </ul>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="gl"></canvas>
+    <div id="popups"></div>
+    <div id="camPanel" class="cam-panel" hidden aria-label="Camera controls">
+      <div class="cam-row">
+        <button class="cbtn" data-cam="left" aria-label="Orbit left" title="Orbit left (J)">◀</button>
+        <button class="cbtn" data-cam="up" aria-label="Orbit up" title="Orbit up (I)">▲</button>
+        <button class="cbtn" data-cam="down" aria-label="Orbit down" title="Orbit down (K)">▼</button>
+        <button class="cbtn" data-cam="right" aria-label="Orbit right" title="Orbit right (L)">▶</button>
+        <span class="cam-sep"></span>
+        <button class="cbtn" data-cam="zoomout" aria-label="Zoom out" title="Zoom out (-)">−</button>
+        <button class="cbtn" data-cam="zoomin" aria-label="Zoom in" title="Zoom in (=)">+</button>
+        <button class="cbtn close" data-cam="close" aria-label="Close camera panel">✕</button>
+      </div>
+      <div class="cam-row">
+        <button class="cbtn wide" data-cam="preset0">Front</button>
+        <button class="cbtn wide" data-cam="preset1">Angled</button>
+        <button class="cbtn wide" data-cam="preset2">Dramatic</button>
+        <button class="cbtn wide" data-cam="reset" title="Reset to head-on (R / 0)">Reset</button>
+      </div>
+    </div>
+    <div id="overlay" class="overlay show">
+      <div class="overlay-inner">
+        <h2 id="ovTitle">TETRIS</h2>
+        <p id="ovText">Stack. Clear. Repeat.</p>
+        <p id="ovScore" class="ov-score"></p>
+        <button id="ovBtn" class="big-btn" type="button">Play</button>
+        <p class="hint desktop-only">Press <kbd>Enter</kbd> to start</p>
+        <dl class="gestures touch-only" aria-label="Touch controls">
+          <dt>Tap</dt><dd>rotate</dd>
+          <dt>Drag</dt><dd>move</dd>
+          <dt>Flick ↓</dt><dd>hard drop</dd>
+          <dt>Flick ↑</dt><dd>hold</dd>
+          <dt>2 fingers</dt><dd>orbit camera</dd>
+          <dt>Pinch</dt><dd>zoom</dd>
+          <dt>◈</dt><dd>camera panel</dd>
+        </dl>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel right">
+    <div class="card next-card">
+      <span class="label">Next</span>
+      <canvas id="nextCanvas" class="preview tall"></canvas>
+    </div>
+    <div class="tools">
+      <button id="pauseBtn" class="tool" type="button" aria-label="Pause" title="Pause (P)">❚❚</button>
+      <button id="viewBtn" class="tool" type="button" aria-label="Camera controls" title="Camera controls">◈</button>
+      <button id="soundBtn" class="tool" type="button" aria-label="Toggle sound" title="Sound (M)">♪</button>
+      <button id="fsBtn" class="tool" type="button" aria-label="Toggle full screen" title="Full screen (F)" hidden>⛶</button>
+    </div>
+  </aside>
+
+  <div id="touch" class="touch-only">
+    <div class="pad">
+      <button class="tbtn" data-act="left" aria-label="Move left">◀</button>
+      <button class="tbtn" data-act="down" aria-label="Soft drop">▼</button>
+      <button class="tbtn" data-act="right" aria-label="Move right">▶</button>
+    </div>
+    <div class="pad">
+      <button class="tbtn" data-act="ccw" aria-label="Rotate counter-clockwise">⟲</button>
+      <button class="tbtn" data-act="cw" aria-label="Rotate clockwise">⟳</button>
+      <button class="tbtn accent" data-act="drop" aria-label="Hard drop">⤓</button>
+    </div>
+  </div>
+</div>
+<div id="a2hs" class="a2hs" role="note" hidden>
+  <span>For full screen: Share <span class="share-ico" aria-hidden="true">⬆︎</span> → <b>Add to Home Screen</b></span>
+  <button id="a2hsClose" type="button" aria-label="Dismiss">✕</button>
+</div>
+<noscript>This game needs JavaScript and WebGL.</noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

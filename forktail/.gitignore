@@ -1,0 +1,3 @@
+# The pack is the storage; these only exist while it is unpacked for editing.
+assets/portraits/
+assets/dialog.json

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#07070f">
+<title>Lobsternaut Arcade</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 fill=%27%2312325e%27/%3E%3Crect x=%270%27 y=%2712%27 width=%2732%27 height=%278%27 fill=%27%23f2f0e6%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%279%27 fill=%27%2312325e%27/%3E%3Cpath d=%27M16 8.5l2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7z%27 fill=%27%23f2f0e6%27/%3E%3C/svg%3E">
+<style>
+html,body{margin:0;background:#07070f;color:#e8e8f4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100%}
+body{padding:calc(env(safe-area-inset-top) + 28px) 18px calc(env(safe-area-inset-bottom) + 28px);
+ background:radial-gradient(1200px 600px at 50% -10%,#24124a 0%,#07070f 60%) fixed}
+h1{margin:0 0 6px;text-align:center;font-size:clamp(30px,8vw,56px);letter-spacing:.12em;
+ background:linear-gradient(90deg,#4fd1ff,#a77bff,#ff5fa8);-webkit-background-clip:text;background-clip:text;color:transparent}
+p.sub{margin:0 0 28px;text-align:center;color:#9a9ab8;letter-spacing:.2em;font-size:13px;text-transform:uppercase}
+.grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));max-width:900px;margin:0 auto}
+a.card{display:block;text-decoration:none;color:inherit;border-radius:18px;overflow:hidden;background:#12122a;
+ border:1px solid #2a2a50;box-shadow:0 10px 30px #0008;transition:transform .15s,box-shadow .15s,border-color .15s}
+a.card:hover,a.card:focus{transform:translateY(-4px);border-color:#a77bff;box-shadow:0 16px 40px #a77bff33;outline:none}
+.thumb{aspect-ratio:16/10;background:#000 center/cover no-repeat}
+.info{padding:14px 16px 18px}
+.info h2{margin:0 0 4px;font-size:20px}
+.info span{color:#9a9ab8;font-size:14px;line-height:1.4}
+footer{text-align:center;color:#55557a;font-size:12px;margin-top:36px}
+</style></head><body>
+<h1>ARCADE</h1>
+<p class="sub">Insert coin &middot; select game</p>
+<div class="grid">
+ <a class="card" href="tetris/"><div class="thumb" style="background-image:url(thumbs/tetris.png)"></div>
+  <div class="info"><h2>Tetris 3D</h2><span>Falling blocks in a rotating 3D well. Orbit the camera, hold, hard drop.</span></div></a>
+ <a class="card" href="forktail/"><div class="thumb" style="background-image:url(thumbs/forktail.png)"></div>
+  <div class="info"><h2>Fork-Tailed Devil</h2><span>WWII campaign shooter across real Pacific battles: guns and bombs, a hangar tech tree, wingmen and multi-phase bosses. Work in progress.</span></div></a>
+</div>
+<footer>the-lobsternaut</footer>
+</body></html>

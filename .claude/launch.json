@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arcade",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["forktail/server.py", "--port", "8091", "--root", "."],
+      "port": 8091
+    }
+  ]
+}
