@@ -834,9 +834,10 @@ export function createRenderer(canvas, S) {
     return pieces;
   }
   // ---- where the ground actually is
-  // Everything that lies ON the surface - a blast ring, a crater, a splash, the red circle warning
-  // you where a shell is about to land - used to be drawn half a unit above y=0, which was right
-  // while the land was a flat sheet. The land has relief now and rises well above that, so those
+  // Everything that lies ON the land - a blast ring, a scorch mark, a fire carpet, the red circle
+  // warning you where a shell is about to land - used to be drawn half a unit above y=0, which was
+  // right while the land was a flat sheet. Spray, wake and splash are not in that list: those are
+  // water, and the water is still at zero. The land has relief now and rises well above that, so those
   // decals were being drawn inside the hill and you never saw them: a nuke over Oahu was a column
   // of smoke with no flash and no shockwave under it.
   // Asking the polygons for a height per sprite per frame would be a nearest-point search over the
@@ -1093,6 +1094,36 @@ export function createRenderer(canvas, S) {
 
   // ---------------------------------------------------------------- per-frame helpers
   function placeObj(o, gx, gy, altW, scaleK) { const t = ray(gx, gy, altW); o.position.copy(P); const s = sc(t) * (scaleK || 1); o.scale.setScalar(s); return s; }
+  // A hull is long, and the game's screen position maps to the world through a perspective camera,
+  // so the mapping is not linear along its length. A battleship's 150 units are 127 world units
+  // from bow to stern down there; dropped in rigidly at the scale of its own midpoint it comes out
+  // about 104, roughly a fifth short, with each end that much inside where the game says it is.
+  // Everything else on the water is cast point by point - its own wake, a splash, a blast ring -
+  // so the bow wave broke ahead of the bow and the wake sat off the stern. Cast the two ends and
+  // stretch the hull between them: the ends land where the game puts them, the beam and the
+  // superstructure keep the midpoint's scale, and only the length gives. A hull well off to one
+  // side has ends at different world x too, and then it leans along its own chord, which is what
+  // a long thing pointing away from you does.
+  const hullA = new THREE.Vector3(), hullB = new THREE.Vector3();
+  function geoLen(g) {
+    if (g.userData.zlen === undefined) { if (!g.boundingBox) g.computeBoundingBox(); g.userData.zlen = (g.boundingBox.max.z - g.boundingBox.min.z) || 1; }
+    return g.userData.zlen;
+  }
+  function placeHull(o, gx, gy, len, altW, scaleK, gLen) {
+    const half = len / 2;
+    const ta = ray(gx, gy - half, altW); hullA.copy(P);
+    const tb = ray(gx, gy + half, altW); hullB.copy(P);
+    // Above the horizon the cast has no answer. A carrier is 270 units long and spawns clear of
+    // the top of the field, so its bow end reaches past the horizon while the whole ship is still
+    // off screen - cast it and the hull lands anywhere. Hold the old rigid placement for those
+    // frames: wrong by the fifth it always was, and nobody is looking at it yet.
+    if (!(ta > 0) || !(tb > 0)) { o.rotation.set(0, 0, 0); return placeObj(o, gx, gy, altW, scaleK); }
+    const s = sc((ta + tb) / 2) * (scaleK || 1);
+    o.position.set((hullA.x + hullB.x) / 2, (hullA.y + hullB.y) / 2, (hullA.z + hullB.z) / 2);
+    o.rotation.set(0, Math.atan2(hullB.x - hullA.x, hullB.z - hullA.z), 0);
+    o.scale.set(s, s, hullA.distanceTo(hullB) / gLen);
+    return s;
+  }
   function lightAt(i, gx, gy, altW, inten, col) { if (i >= LIGHTS.length) return; ray(gx, gy, altW + 12); const l = LIGHTS[i]; l.position.copy(P); l.intensity = inten; l.color.setHex(col || 0xffa860); }
   let litN = 0;
   let scrollAcc = 0, lastScroll = 0;
@@ -1271,8 +1302,8 @@ export function createRenderer(canvas, S) {
         }
         case 'flame': sprite(ADD, q.x, q.y, altW, q.s * (0.6 + u * 0.8), 1, u * 4, 1.0, 0.55 + u * 0.3, 0.2, u, 1); break;
         case 'spark': sprite(ADD, q.x, q.y, altW, q.s * 2.4, 1, 0, 1.0, 0.75, 0.4, u, 3); break;
-        case 'splash': if (u <= 1) { sprite(SMOKE, q.x, q.y, altW + 2 + (1 - u) * 8, q.s, 1, q.rot || 0, 0.95, 0.97, 1.0, Math.min(1, u * 1.6) * 0.65, 5); sprite(FLAT, q.x, q.y, 0.3 + groundY(q.x, q.y), q.s * (1.6 - u * 0.6), 1, q.rot || 0, 1, 1, 1, u * 0.35, 6); } break;
-        case 'foam': sprite(FLAT, q.x, q.y, 0.25 + groundY(q.x, q.y), q.s * (1.9 - u) * 2, 1, q.rot || 0, 1, 1, 1, u * 0.7, 4); break;
+        case 'splash': if (u <= 1) { sprite(SMOKE, q.x, q.y, altW + 2 + (1 - u) * 8, q.s, 1, q.rot || 0, 0.95, 0.97, 1.0, Math.min(1, u * 1.6) * 0.65, 5); sprite(FLAT, q.x, q.y, 0.3, q.s * (1.6 - u * 0.6), 1, q.rot || 0, 1, 1, 1, u * 0.35, 6); } break;
+        case 'foam': sprite(FLAT, q.x, q.y, 0.25, q.s * (1.9 - u) * 2, 1, q.rot || 0, 1, 1, 1, u * 0.7, 4); break;
         case 'debris': break; // instanced boxes below
         default: sprite(SMOKE, q.x, q.y, altW, q.s, 1, 0, 0.6, 0.6, 0.6, u * 0.5, 0);
       }
@@ -1376,8 +1407,7 @@ export function createRenderer(canvas, S) {
     const pl = shipPool.pools[type] || (shipPool.pools[type] = meshPool(() => shipMesh(type)));
     const m = pl.get();
     const sink = h.dead ? h.deadT : 0;
-    const s = placeObj(m, h.x, h.y, -sink * 5, h.pt ? 0.45 : 1);
-    m.rotation.set(0, 0, 0);
+    const s = placeHull(m, h.x, h.y, h.h, -sink * 5, h.pt ? 0.45 : 1, geoLen(m.userData.geo));
     const lg = m.userData.listG; lg.rotation.set(sink * 0.08, 0, (h.list || 0) * 0.6 + sink * 0.12);
     const body = m.userData.body; body.userData.dmg = 1 - Math.max(0, h.hp) / h.maxhp; body.userData.flash = h.flash > 0 ? 0.35 : 0; body.userData.seed = (h.id || 0) % 13;
     // turrets as children of the hull (rotate independently)
