@@ -53,3 +53,11 @@ midriff), so the game runs with no portrait art at all.
 
 The previous 3D character system (Quaternius "Ultimate Modular Women/Men" CC0 GLBs rendered with
 GLTFLoader + SkeletonUtils + meshopt) was removed along with its assets and loaders.
+
+## Coastlines
+
+Level maps (`js/terrain.js`) are built from OpenStreetMap `natural=coastline` data:
+stitched, projected into playfield units and simplified by `tools/coastline.py`.
+
+Map data © OpenStreetMap contributors, available under the Open Database Licence (ODbL).
+https://www.openstreetmap.org/copyright

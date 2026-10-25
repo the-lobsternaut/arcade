@@ -82,19 +82,25 @@ html, body {
 /* radio toast */
 /* radio call: a card in the upper left, portrait over text. The card itself stays click-through so
    you can still fly under it; only the X takes a tap. */
-.toast { position: absolute; display: flex; flex-direction: column; gap: 4px; padding: 5px; overflow: hidden;
-  pointer-events: none; border-color: rgba(120,200,255,0.6);
-  border-left: none; border-radius: 0 8px 8px 0;            /* it belongs to the edge it came from */
-  transform: translateX(0);
-  /* in and out both ride the same curve, so it leaves the way it arrived rather than blinking off */
-  transition: transform 0.34s cubic-bezier(0.22, 0.9, 0.3, 1); }
-.toast.hidden { transform: translateX(-101%); }
-.toast .tslot { flex: 1 1 auto; min-height: 0; border-radius: 4px; overflow: hidden;
-  background: radial-gradient(ellipse at 50% 35%, #3e4a58, #12161c); border: 1px solid rgba(214,180,100,0.5); }
-.toast .ttext { flex: none; }
+/* A radio call runs across the top: portrait in the upper left, text beside it at forty percent
+   of the height. The container itself is invisible - the two panels carry their own chrome - so
+   the corner under the text is a cutout you can still see the game through. */
+.toast { position: absolute; display: flex; align-items: flex-start; gap: 6px; padding: 0;
+  background: none; border: none; box-shadow: none; overflow: visible; pointer-events: none;
+  transform: translateY(0);
+  transition: transform 0.34s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.2s; }
+.toast.hidden { transform: translateY(-104%); opacity: 0; }
+.toast .tslot { flex: none; align-self: stretch; border-radius: 0 6px 6px 0; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #3e4a58, #12161c);
+  border: 1px solid rgba(214,180,100,0.5); border-left: none;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.5); }
+.toast .ttext { flex: 1 1 auto; min-width: 0; overflow: hidden; padding: 5px 36px 5px 6px;
+  border-radius: 6px 0 0 6px; border: 1px solid rgba(120,200,255,0.5); border-right: none;
+  background: linear-gradient(180deg, rgba(14,22,34,0.93), rgba(10,16,26,0.88));
+  box-shadow: 0 3px 12px rgba(0,0,0,0.45); }
 .toast .ttext b { display: block; font-size: 11px; color: #9fd8ff; letter-spacing: 0.05em; }
 .toast .ttext span { display: block; font-size: 12px; line-height: 1.22; }
-.toast .tx { position: absolute; right: 3px; top: 3px; z-index: 2; pointer-events: auto; cursor: pointer;
+.toast .tx { position: absolute; right: 4px; top: 4px; z-index: 2; pointer-events: auto; cursor: pointer;
   width: 26px; height: 26px; line-height: 22px; text-align: center; font-size: 17px; padding: 0;
   color: #d8e4f0; background: rgba(10,16,24,0.72); border: 1px solid rgba(160,200,235,0.5); border-radius: 50%; }
 .toast .tx:active { background: rgba(60,90,120,0.9); }

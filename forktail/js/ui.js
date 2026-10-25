@@ -79,12 +79,26 @@ window.SKY = window.SKY || {};
   let toastT = 0, toastBusy = false;
   function radioToast(who, look, name, text, expr, sec) {
     if (UI.open || brief.active) return;
+    // Nothing talks to you during a boss. A callout clears the sky, and clearing the sky in the
+    // middle of a boss fight is either a free pass or a lost one - neither is the fight you were
+    // having. It also puts a card over the corner you are trying to read the pattern in.
+    const wd = G.world && G.world();
+    if (wd && wd.phase === 'boss') return;
+    // No face, no transmission. A card with an empty box where someone should be is worse than
+    // the line going unsaid.
+    if (!S.chars || !S.chars.ok || !S.chars.has || !S.chars.has(who)) return;
     sec = sec || Math.min(7, 2.4 + text.length * 0.045);
+    // Across the top, full width. The portrait is a 2:3 box in the upper left and the text sits
+    // beside it but only forty percent as tall, so the card is an L and the corner under the text
+    // stays open onto the game.
     const f = field();
-    toast.style.left = f.x + 'px';           // flush to the edge: it slides in from off screen
-    toast.style.top = (f.y + f.h * 0.085 + 4) + 'px';
-    toast.style.width = Math.round(f.w * 0.60) + 'px';
-    toast.style.height = Math.round(f.h * 0.333) + 'px';
+    const aw = Math.round(f.w * 0.30), ah = Math.round(aw * 1.5);
+    toast.style.left = f.x + 'px';
+    toast.style.top = (f.y + f.h * 0.085) + 'px';
+    toast.style.width = f.w + 'px';
+    toast.style.height = ah + 'px';
+    $('.tslot', toast).style.width = aw + 'px';
+    $('.ttext', toast).style.height = Math.round(ah * 0.40) + 'px';
     toast.classList.remove('hidden'); toast.classList.add('show');
     $('b', toast).textContent = name; $('span', toast).textContent = text;
     showChar($('.tslot', toast), who, look, { expr: expr || 'neutral', framing: 'fit', animate: true });

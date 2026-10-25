@@ -549,23 +549,74 @@ export function createRenderer(canvas, S) {
   // A map is polygons in playfield coordinates. Triangulate once there, then map the vertices
   // through the camera every frame: the coast lands exactly where the gameplay says it does, at
   // any tilt, and a ship moored off a point stays off that point.
-  // Flat-coloured land reads as a polygon, not as ground. Break it up with the same two-octave
-  // value noise the sea uses, keyed off world position so it does not swim when the map scrolls.
-  function groundMat(a, b, scale) {
-    const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0 });
-    const h21 = Fn(([q]) => fract(sin(dot(q, vec2(127.1, 311.7))).mul(43758.5453)));
-    const vn = Fn(([q]) => {
-      const i = floor(q), f = fract(q).toVar();
-      f.assign(f.mul(f).mul(float(3).sub(f.mul(2))));
-      return mix(mix(h21(i), h21(i.add(vec2(1, 0))), f.x), mix(h21(i.add(vec2(0, 1))), h21(i.add(vec2(1, 1))), f.x), f.y);
+  // What makes an island read as a photograph rather than a polygon is almost entirely its edge:
+  // white surf, then a band of sand, then turquoise shallows shelving into deep water, with
+  // mottled ground behind it. Flat fill with a little noise on it will always look like a map.
+  // So each coast is drawn three times - surf ring, shallows ring, then the land - each one the
+  // same polygon pushed outward along its vertex normals, and the land itself carries a tiling
+  // aerial texture sampled by world position so it does not swim as the map scrolls.
+  // The game already ships photographs of islands from the air. The middle of one of them is
+  // exactly the ground texture this wants - real vegetation, real cleared land, real colour
+  // relationships - so take a square out of the centre (well inside the alpha edge) and
+  // mirror-tile it so the joins do not show. Nothing hand-painted gets close.
+  const groundC = document.createElement('canvas'); groundC.width = groundC.height = 512;
+  const groundTex = new THREE.CanvasTexture(groundC);
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+  groundTex.colorSpace = THREE.SRGBColorSpace;
+  {
+    const g = groundC.getContext('2d');
+    g.fillStyle = '#2d3a20'; g.fillRect(0, 0, 512, 512);          // until the photo lands
+    imgLoad('assets/island3.webp').then((im) => {
+      if (!im) return;
+      // a square from the middle, inset so no transparent coastline comes with it
+      const side = Math.min(im.width, im.height) * 0.34;
+      const sx = (im.width - side) / 2, sy = (im.height - side) / 2;
+      g.save();
+      g.drawImage(im, sx, sy, side, side, 0, 0, 256, 256);        // top-left quarter
+      g.translate(512, 0); g.scale(-1, 1); g.drawImage(groundC, 0, 0, 256, 256, 0, 0, 256, 256);
+      g.restore();
+      g.save(); g.translate(0, 512); g.scale(1, -1);
+      g.drawImage(groundC, 0, 0, 512, 256, 0, 0, 512, 256);        // mirror the whole top half down
+      g.restore();
+      groundTex.needsUpdate = true;
     });
-    const q = vec2(positionWorld.x, positionWorld.z).mul(scale);
-    const n = vn(q).mul(0.62).add(vn(q.mul(3.7)).mul(0.38));
-    m.colorNode = mix(vec3(a[0], a[1], a[2]), vec3(b[0], b[1], b[2]), n);
+  }
+  // One mirror-tiled photograph repeats as a very obvious butterfly. Sample it twice instead, at
+  // scales and rotations that share no common multiple, and mix: the two patterns cancel each
+  // other out and what is left reads as ground rather than wallpaper.
+  function groundMat(scale, tint) {
+    const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.96, metalness: 0, fog: false });
+    const w = vec2(positionWorld.x, positionWorld.z);
+    const rot = (v, a) => { const c = Math.cos(a), s2 = Math.sin(a);
+      return vec2(v.x.mul(c).sub(v.y.mul(s2)), v.x.mul(s2).add(v.y.mul(c))); };
+    const c1 = texture(groundTex, rot(w, 0.0).mul(scale)).rgb;
+    const c2 = texture(groundTex, rot(w, 1.19).mul(scale * 0.413)).rgb;
+    const c3 = texture(groundTex, rot(w, 2.41).mul(scale * 1.77)).rgb;
+    m.colorNode = mix(mix(c1, c2, 0.5), c3, 0.26).mul(vec3(tint[0], tint[1], tint[2]));
     return m;
   }
-  const landMat = groundMat([0.13, 0.17, 0.08], [0.27, 0.31, 0.15], 0.011);
-  const isleMat = groundMat([0.16, 0.21, 0.10], [0.31, 0.35, 0.18], 0.022);
+  const landMat = groundMat(0.0021, [0.92, 0.95, 0.84]);
+  const isleMat = groundMat(0.0052, [0.98, 1.0, 0.88]);
+  const deepMat = new THREE.MeshBasicNodeMaterial({ color: 0x3f7f96, transparent: true, opacity: 0.34, depthWrite: false });
+  const shelfMat = new THREE.MeshBasicNodeMaterial({ color: 0x6fb9ba, transparent: true, opacity: 0.46, depthWrite: false });
+  const surfMat = new THREE.MeshBasicNodeMaterial({ color: 0xdceee8, transparent: true, opacity: 0.62, depthWrite: false });
+  const sandMat = new THREE.MeshBasicNodeMaterial({ color: 0xd9cb9f, transparent: true, opacity: 0.9, depthWrite: false });
+  // Push a polygon outward along each vertex's angle bisector. Good enough for a coast: the
+  // offsets are small next to the features, so the concave bits (the lochs) do not fold over.
+  function offsetPoly(poly, d) {
+    const n = poly.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const p = poly[i], a = poly[(i - 1 + n) % n], b = poly[(i + 1) % n];
+      let n1x = p[1] - a[1], n1y = a[0] - p[0];
+      let n2x = b[1] - p[1], n2y = p[0] - b[0];
+      const m1 = Math.hypot(n1x, n1y) || 1, m2 = Math.hypot(n2x, n2y) || 1;
+      n1x /= m1; n1y /= m1; n2x /= m2; n2y /= m2;
+      let vx = n1x + n2x, vy = n1y + n2y;
+      const m = Math.hypot(vx, vy) || 1;
+      out.push([p[0] + (vx / m) * d, p[1] + (vy / m) * d]);
+    }
+    return out;
+  }
   function buildPiece(poly, mat, order) {
     const pts = poly.map((q) => new THREE.Vector2(q[0], q[1]));
     const idx = THREE.ShapeUtils.triangulateShape(pts, []);
@@ -579,13 +630,34 @@ export function createRenderer(canvas, S) {
     scene.add(m); m.visible = false;
     return m;
   }
+  // A coast is four rings, widest first: the shelf shelving out of deep water, turquoise shallows,
+  // a line of surf, and the land itself sitting on top of all of them.
+  const COAST = [
+    { d: 6.0, mat: () => deepMat, order: -9, y: 0.12 },
+    { d: 3.2, mat: () => shelfMat, order: -8, y: 0.18 },
+    { d: 1.5, mat: () => surfMat, order: -7, y: 0.24 },
+    { d: 0.7, mat: () => sandMat, order: -6, y: 0.30 },
+  ];
+  function buildCoast(poly, landM, baseOrder) {
+    const pieces = [];
+    for (const c of COAST) {
+      const m = buildPiece(offsetPoly(poly, c.d), c.mat(), baseOrder + c.order);
+      m.userData.lift = c.y;
+      pieces.push(m);
+    }
+    const land = buildPiece(poly, landM, baseOrder);
+    land.userData.lift = 0.36;
+    pieces.push(land);
+    return pieces;
+  }
   const terrainCache = {};
   function terrainFor(id) {
     if (terrainCache[id] !== undefined) return terrainCache[id];
     const M = mapFor(id);
     if (!M) return (terrainCache[id] = null);
-    const t = { map: M, land: (M.land || []).map((p) => buildPiece(p, landMat, -6)),
-                isles: (M.isles || []).map((p) => buildPiece(p, isleMat, -5)) };
+    const t = { map: M, pieces: [] };
+    for (const poly of M.land || []) t.pieces = t.pieces.concat(buildCoast(poly, landMat, 0));
+    for (const poly of M.isles || []) t.pieces = t.pieces.concat(buildCoast(poly, isleMat, 10));
     return (terrainCache[id] = t);
   }
   const terrPt = new THREE.Vector3();
@@ -594,19 +666,19 @@ export function createRenderer(canvas, S) {
     const t = L ? terrainFor(L.id) : null;
     for (const k in terrainCache) {
       const o = terrainCache[k];
-      if (o && o !== t) { for (const m of o.land.concat(o.isles)) m.visible = false; }
+      if (o && o !== t) for (const m of o.pieces) m.visible = false;
     }
     if (!t) return;
     // the map slides down the field as the stage scrolls, the same way everything else does
     const off = w.scrollY - t.map.at;
     drawWrecks(t.map, off, w);
-    for (const m of t.land.concat(t.isles)) {
-      const pts = m.userData.pts, pos = m.geometry.attributes.position.array;
+    for (const m of t.pieces) {
+      const pts = m.userData.pts, pos = m.geometry.attributes.position.array, lift = m.userData.lift;
       let onScreen = false;
       for (let i = 0; i < pts.length; i++) {
         const gy = off - pts[i].y + w.H;       // playfield y runs north; the field scrolls south
         ray(pts[i].x, gy, 0);
-        pos[i * 3] = P.x; pos[i * 3 + 1] = 0.35; pos[i * 3 + 2] = P.z;
+        pos[i * 3] = P.x; pos[i * 3 + 1] = lift; pos[i * 3 + 2] = P.z;
         if (gy > -400 && gy < w.H + 400) onScreen = true;
       }
       m.visible = onScreen;
