@@ -43,7 +43,7 @@ window.SKY = window.SKY || {};
   // 50x base per-bullet damage (1), radius = 1/3 playfield width. Thirty seconds between shots: a
   // weapon that clears a third of the screen cannot also be your primary, so the reload is the
   // balance. Levels shave it down, they do not make it spammable.
-  const NUKE = { dmg: 50, radius: W / 3, cd: 30, lvlCut: 0.1 };
+  const NUKE = { dmg: 50, radius: W / 3, cd: 5, lvlCut: 0.1 };
 
   // ---------------------------------------------------------------- tech tree (prerequisites + costs, in MERIT)
   const TECH = [

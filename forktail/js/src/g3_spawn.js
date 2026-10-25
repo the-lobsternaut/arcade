@@ -61,22 +61,88 @@
     };
     hulks.push(h); return h;
   }
+  // ---- where a ship may be put
+  // Nothing stops a hull steaming over an island: to the game a coastline is a picture, drawn by
+  // the renderer, and the only thing that ever knows about it is the spawner. So the spawner is
+  // where it has to be settled. A lane needs water under the hull now AND water all the way along
+  // the track it will take before it leaves the field - the map slides past, so a ship crosses a
+  // few hundred units of it on the way through, and an island that is clear at spawn is not clear
+  // thirty seconds later. It also needs to be a lane nobody is already in.
+  const LANE_STEP = 22, LANE_REACH = 150;
+  function overLand(x, y) { const R3 = S.r3d; return !!(R3 && R3.landAt && R3.landAt(curLevel(), x, y, scrollY, H)); }
+  function waterLane(x, y, def) {
+    const R3 = S.r3d; if (!R3 || !R3.landAt) return true;     // no terrain, no land to avoid
+    const half = def.w / 2 + 5;
+    // A ship advances through the map at its own speed while the field scrolls past underneath, so
+    // how far it gets is its speed times how long it has on screen. Negative speed (a PT boat runs
+    // with the scroll) just means it travels the other way through the map.
+    // Capped, because a whole crossing is several hundred units and some of these maps are mostly
+    // island - demand a clear lane that long and Pearl Harbor has nowhere to put a destroyer at
+    // all. This covers the approach you actually watch; anything that still ends up ashore is
+    // caught on the way in, off the top of the field, where nobody sees it go.
+    const onField = (H + def.h) / Math.max(5, SCROLL - def.speed);
+    const reach = clamp(def.speed * onField, -LANE_REACH, LANE_REACH);
+    const n = Math.max(1, Math.ceil(Math.abs(reach) / LANE_STEP));
+    for (let k = 0; k <= n; k++) {
+      const d = reach * (k / n);
+      for (const ox of [-half, 0, half]) if (overLand(x + ox, y - d)) return false;
+    }
+    return true;
+  }
+  function laneClear(x, y, def) {
+    for (const h of hulks) {
+      if (h.dead) continue;
+      if (Math.abs(h.x - x) < (h.w + def.w) / 2 + 10 && Math.abs(h.y - y) < (h.h + def.h) / 2 + 18) return false;
+    }
+    return true;
+  }
+  // Returns null when there is nowhere to put it. An empty sea is a better answer than a destroyer
+  // parked on a hill or inside another destroyer.
+  function placeShip(type, y, lo, hi, pt) {
+    const def = SHIPS[type], half = def.w / 2 + 4;
+    lo = Math.max(lo, half); hi = Math.min(hi, W - half);
+    if (hi <= lo) return null;
+    for (let i = 0; i < 16; i++) {
+      const x = rand(lo, hi);
+      if (waterLane(x, y, def) && laneClear(x, y, def)) {
+        const h = makeHulk(type, x, y, 'ship');
+        if (pt) { h.vx = 0; h.pt = true; }
+        return h;
+      }
+    }
+    return null;
+  }
   function waveShips() {
     const r = Math.random();
     if (r < 0.45) {
-      const bx = rand(60, W - 60);
-      makeHulk('battleship', bx, -SHIPS.battleship.h / 2 - 6, 'ship');
-      if (Math.random() < 0.6) makeHulk('destroyer', bx < W / 2 ? bx + rand(55, 90) : bx - rand(55, 90), -60 - rand(30, 90), 'ship');
+      const b = placeShip('battleship', -SHIPS.battleship.h / 2 - 6, 60, W - 60);
+      if (b && Math.random() < 0.6) {
+        const y = -60 - rand(30, 90);
+        if (b.x < W / 2) placeShip('destroyer', y, b.x + 55, b.x + 90); else placeShip('destroyer', y, b.x - 90, b.x - 55);
+      }
     } else if (r < 0.8 || D() < 1) {
-      makeHulk('destroyer', rand(26, W / 2 - 25), -45, 'ship');
-      makeHulk('destroyer', rand(W / 2 + 25, W - 26), -45 - rand(30, 110), 'ship');
+      placeShip('destroyer', -45, 26, W / 2 - 25);
+      placeShip('destroyer', -45 - rand(30, 110), W / 2 + 25, W - 26);
     } else { for (let i = 0; i < 3; i++) spawnPT(rand(30, W - 30), -30 - i * 40); }
   }
-  function spawnPT(x, y) { const h = makeHulk('ptboat', x, y, 'ship'); h.vx = 0; h.pt = true; return h; }
+  function spawnPT(x, y) {
+    // the caller suggests an x; the lane search keeps it near there and off the rocks
+    return placeShip('ptboat', y, x - 45, x + 45, true);
+  }
+  // The boss belongs in the middle of the field, so it starts there and steps outward only as far
+  // as it has to for a hull-width of water.
+  function bossX(type) {
+    const def = SHIPS[type];
+    for (let d = 0; d <= W / 2; d += 14) for (const s of (d ? [-1, 1] : [0])) {
+      const x = W / 2 + s * d;
+      if (x > def.w / 2 + 4 && x < W - def.w / 2 - 4 && waterLane(x, -def.h / 2 - 10, def)) return x;
+    }
+    return W / 2;
+  }
   function spawnBoss() {
     const type = bossTypeFor(stage);
     if (type === 'bossShip') {
-      boss = makeHulk('bossShip', W / 2, -SHIPS.bossShip.h / 2 - 10, 'ship'); boss.vy = SCROLL + 34;
+      boss = makeHulk('bossShip', bossX('bossShip'), -SHIPS.bossShip.h / 2 - 10, 'ship'); boss.vy = SCROLL + 34;
       boss.turrets = SHIPS.bossShip.turrets.map(([ox, oy, big]) => mkPart(ox, oy, big ? 'main' : 'aa', big ? 14 : 5));
       boss.turrets.push(mkPart(0, -48, 'bridge', 40));
     } else if (type === 'bossBomber') {
@@ -85,7 +151,7 @@
         mkPart(0, -35, 'dorsal', 7), mkPart(0, -9, 'dorsal', 7), mkPart(0, 48, 'tail', 9), mkPart(-51, -10, 'aa', 5), mkPart(51, -10, 'aa', 5)];
     } else {
       const c = SHIPS.carrier;
-      boss = makeHulk('carrier', W / 2, -c.h / 2 - 10, 'ship'); boss.vy = SCROLL + 34;
+      boss = makeHulk('carrier', bossX('carrier'), -c.h / 2 - 10, 'ship'); boss.vy = SCROLL + 34;
       boss.turrets = [mkPart(0, -c.h * 0.24, 'elevator', 22), mkPart(0, c.h * 0.27, 'elevator', 22), mkPart(c.w * 0.3, -c.h * 0.03, 'bridge', 40)];
       for (const s of [-1, 1]) for (const fy of [-0.36, -0.15, 0.08, 0.3]) boss.turrets.push(mkPart(s * c.w * 0.4, fy * c.h, 'aa', 5));
     }

@@ -859,6 +859,11 @@ export function createRenderer(canvas, S) {
     if (!any) return null;
     const gw = Math.max(1, Math.ceil((x1 - x0) / HCELL) + 1), gh = Math.max(1, Math.ceil((y1 - y0) / HCELL) + 1);
     const a = new Float32Array(gw * gh);
+    // Where the land IS, as opposed to how high it is: a shore cell is barely above the water and
+    // would read as sea on height alone. Every cell a land triangle touches is marked, which
+    // rounds the coast outward by up to a cell - the right way to be wrong for something that
+    // decides where a ship is allowed to sail.
+    const land = new Uint8Array(gw * gh);
     for (const m of t.pieces) {
       const d = m.userData; if (!d.el) continue;
       for (let i = 0; i < d.mx.length; i++) {
@@ -866,8 +871,19 @@ export function createRenderer(canvas, S) {
         const k = gy * gw + gx, v = d.lift + d.el[i];
         if (v > a[k]) a[k] = v;
       }
+      const idx = m.geometry.index ? m.geometry.index.array : null;
+      if (!idx) continue;
+      for (let i = 0; i < idx.length; i += 3) {
+        const A = idx[i], B = idx[i + 1], C = idx[i + 2];
+        const ax = d.mx[A], bx = d.mx[B], cx = d.mx[C], ay = d.my[A], by = d.my[B], cy = d.my[C];
+        const c0 = Math.max(0, Math.floor((Math.min(ax, bx, cx) - x0) / HCELL));
+        const c1 = Math.min(gw - 1, Math.ceil((Math.max(ax, bx, cx) - x0) / HCELL));
+        const r0 = Math.max(0, Math.floor((Math.min(ay, by, cy) - y0) / HCELL));
+        const r1 = Math.min(gh - 1, Math.ceil((Math.max(ay, by, cy) - y0) / HCELL));
+        for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) land[r * gw + c] = 1;
+      }
     }
-    return { x0, y0, gw, gh, a };
+    return { x0, y0, gw, gh, a, land };
   }
   let curHG = null, curOff = 0, curH = 0;
   // gx, gy are field coordinates - the same ones every sprite is placed with.
@@ -880,6 +896,20 @@ export function createRenderer(canvas, S) {
     const a = g.a, r0 = iy * g.gw, r1 = jy * g.gw;
     return (a[r0 + ix] * (1 - tx) + a[r0 + jx] * tx) * (1 - ty) + (a[r1 + ix] * (1 - tx) + a[r1 + jx] * tx) * ty;
   }
+  // Is this playfield point land on the map being drawn? Asked by the spawner, which has no idea
+  // the land exists otherwise - to the game a coastline is a picture, and nothing stops a
+  // destroyer steaming over a hill except not putting it there in the first place.
+  // Takes the scroll rather than reading the last frame's: the spawner runs in the update, which
+  // is not the draw, and a lane test that quietly used a stale offset would be a ship on a hill
+  // every time the two drifted apart.
+  R.landAt = function (level, gx, gy, scrollY, H) {
+    const t = level ? terrainFor(level.id) : null;
+    const g = t && t.hg; if (!g || !g.land) return false;
+    const my = (scrollY - t.map.at) + H - gy;
+    const cx = Math.round((gx - g.x0) / HCELL), cy = Math.round((my - g.y0) / HCELL);
+    if (cx < 0 || cy < 0 || cx >= g.gw || cy >= g.gh) return false;
+    return g.land[cy * g.gw + cx] === 1;
+  };
   const terrainCache = {};
   function terrainFor(id) {
     if (terrainCache[id] !== undefined) return terrainCache[id];

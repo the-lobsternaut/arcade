@@ -81,6 +81,16 @@
     if (!hook('victory', victoryStats())) enterHangar(false);
   }
   G.toHangar = () => { enterHangar(false); };
+  // Walk out of a mission at any time. It is abandoned, not flown: the score and the Merit go back
+  // to what they were on the runway, the battle stays unwon, and you start it over when you come
+  // back. Nothing is kept, so there is nothing to farm.
+  G.abortMission = function () {
+    if (state !== 'play') return false;
+    if (run && missionStart) { run.score = missionStart.score; score = missionStart.score; run.merit = missionStart.merit; }
+    abortArmUntil = 0;
+    enterHangar(false);
+    return true;
+  };
   function enterHangar(resumed) {
     state = 'hangar'; stateT = 0; paused = false; hold = false;
     clearField();
@@ -223,15 +233,25 @@
   G.toggleMute = () => A.toggleMute();
   const BTN = { pause: [W - 30, 2, 13, 11], mute: [W - 15, 2, 13, 11], music: [W - 45, 2, 13, 11], fs: [W - 60, 2, 13, 11] };
   const TITLE_BTN = { cont: null, neu: null, dossier: null, save: null };
-  const PAUSE_BTN = { mode: null };   // the same 2D/3D switch, reachable mid-mission
+  const PAUSE_BTN = { mode: null, abort: null };   // the same 2D/3D switch, reachable mid-mission
+  G.abortArmed = () => abortArmUntil > Date.now();
   function inRect(x, y, r, pad) { return r && x >= r[0] - pad && x <= r[0] + r[2] + pad && y >= r[1] - pad && y <= r[1] + r[3] + pad; }
-  function loopBtn() { return [W - 22, H - 24, 13]; }
-  function modeBtn() { return [W - 52, H - 24, 13]; }
+  // Both thumb buttons sit together under the middle of the field rather than tucked into the
+  // right corner, and they are big enough to hit without looking down at them.
+  const BTN_R = 19;
+  function loopBtn() { return [W / 2 + 24, H - 30, BTN_R]; }
+  function modeBtn() { return [W / 2 - 24, H - 30, BTN_R]; }
   G.handleTap = function (x, y) {
     if (inRect(x, y, BTN.mute, 3)) { A.toggleMute(); return true; }
     if (inRect(x, y, BTN.music, 3)) { A.toggleMusic(); return true; }
     if (state === 'play' && inRect(x, y, BTN.pause, 3)) { G.togglePause(); return true; }
     if (state === 'play' && paused && inRect(x, y, PAUSE_BTN.mode, 3)) { G.setMode3d(x > (PAUSE_BTN.mode[0] + PAUSE_BTN.mode[2] / 2)); A.sfx('click'); return true; }
+    // two taps, because one stray thumb on a pause screen should not throw the sortie away
+    if (state === 'play' && paused && inRect(x, y, PAUSE_BTN.abort, 3)) {
+      A.sfx('click');
+      if (G.abortArmed()) G.abortMission(); else abortArmUntil = Date.now() + 3000;
+      return true;
+    }
     if (G.fsSupported && !G.touchMode && inRect(x, y, BTN.fs, 3)) { G.onToggleFullscreen && G.onToggleFullscreen(); return true; }
     if (state === 'title') {
       if (inRect(x, y, TITLE_BTN.mode, 3)) { G.setMode3d(x > (TITLE_BTN.mode[0] + TITLE_BTN.mode[2] / 2)); A.sfx('click'); return true; }

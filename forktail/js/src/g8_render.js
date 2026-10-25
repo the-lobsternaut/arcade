@@ -182,8 +182,14 @@
   function roundBtn(x, y, r, ok, label, glyph) {
     ctx.globalAlpha = ok ? 0.85 : 0.4;
     ctx.fillStyle = 'rgba(20,24,28,0.55)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(217,184,96,0.85)'; ctx.lineWidth = 1; ctx.stroke();
-    glyph(); text(label, x, y + 7, 4.4, PAPER, 'center', 800, false);
+    ctx.strokeStyle = 'rgba(217,184,96,0.85)'; ctx.lineWidth = r / 13; ctx.stroke();
+    // The glyphs are drawn for a 13-unit button, so scale the whole face about its centre rather
+    // than rewriting every arc and rectangle in it - resize the button and the mark follows.
+    const k = r / 13;
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);
+    glyph();
+    ctx.restore();
+    text(label, x, y + 7 * k, 4.4 * k, PAPER, 'center', 800, false);
     ctx.globalAlpha = 1;
   }
   function drawTouchButtons() {
@@ -403,6 +409,12 @@
     modeSwitch(bx, by, bw, bh);
     text('VIEW', W / 2, by - 5, 5, '#8d94a2', 'center', 700, true);
     text(mode3d ? 'CHASE CAMERA - SAME CONTROLS' : 'CLASSIC TOP-DOWN', W / 2, by + bh + 7, 5, '#cfd6e0', 'center', 700, true);
+    const armed = G.abortArmed(), aw = 150, ax = W / 2 - aw / 2, ay = by + bh + 20, ah = 20;
+    PAUSE_BTN.abort = [ax, ay, aw, ah];
+    plate(ax, ay, aw, ah, 3);
+    if (armed) { ctx.strokeStyle = 'rgba(226,72,47,0.9)'; ctx.lineWidth = 0.9; ctx.stroke(); }
+    text(armed ? 'TAP AGAIN TO ABORT' : 'ABORT  -  BACK TO HANGAR', W / 2, ay + ah / 2 + 0.4, 6.6, armed ? '#ff9c86' : PAPER, 'center', 800, true);
+    text('THE MISSION STARTS OVER', W / 2, ay + ah + 7, 5, '#8d94a2', 'center', 700, true);
   }
   // the 2D/3D switch: drawn identically on the title and the pause screen
   function modeSwitch(bx, by, bw, bh) {

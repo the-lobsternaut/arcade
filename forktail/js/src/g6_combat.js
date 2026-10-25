@@ -189,8 +189,10 @@
           if (swept(b, TP[0], TP[1], r)) { damagePart(h, t, b.dmg * (t.kind === 'bridge' ? 0.5 : 1)); struck = true; break; }
         }
         if (!struck && hitHulk(h, b.x, b.y)) {
-          // guns barely scratch armoured hulls (bombs/torpedoes are the hull killers), elevators only take bombs
-          damageHulk(h, b.dmg * (h.kind === 'ship' ? (h.isBoss ? 0.35 : 0.6) : 1)); struck = true;
+          // Rifle calibre against belt armour: it marks the paint. Bombs and torpedoes are what
+          // open a hull, and that is the point of carrying them - guns are for the aircraft and
+          // for stripping a ship's turrets, which take their hits in full above.
+          damageHulk(h, b.dmg * (h.kind === 'ship' ? (h.isBoss ? 0.022 : 0.045) : 1)); struck = true;
         }
         if (struck) {
           sparksAt(b.x, b.y, 2, '#ffe9a0', h.kind === 'ship' ? 6 : 40);

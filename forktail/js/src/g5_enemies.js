@@ -162,6 +162,10 @@
         h.y += h.vy * dt; h.x += h.vx * dt;
         if (h.pt && p && !p.dead) h.vx += (clamp(p.x - h.x, -1, 1) * 30 - h.vx) * Math.min(1, dt);
         if (h.y - h.h / 2 > H + 10) { h.gone = true; h.dead = true; h.deadT = 99; continue; }
+        // The spawner picked a lane with water in it, but a map scrolls and a long approach can
+        // still end at a headland. While a ship is still above the field nobody has seen it yet,
+        // so one that is about to arrive aground simply never arrives.
+        if (h.kind === 'ship' && !h.isBoss && h.y + h.h / 2 < HUD_H && overLand(h.x, h.y)) { h.gone = true; h.dead = true; h.deadT = 99; continue; }
       }
       // wake
       if (h.kind === 'ship') {
