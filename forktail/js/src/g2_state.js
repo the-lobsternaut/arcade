@@ -14,7 +14,7 @@
   try { hiscore = parseInt(localStorage.getItem('sky1943.hi') || '0', 10) || 0; } catch (e) {}
   let player = null, boss = null, run = null, ST = null;
   const nukes = [], pb = [], eb = [], enemies = [], hulks = [], pickups = [], parts = [], fx = [], popups = [], islands = [], clouds = [], warns = [], zones = [], wing = [], groups = new Map();
-  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, chatterT = 20, powSpawned = 0, playT = 0, radioCd = {};
+  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, powSpawned = 0, playT = 0, radioCd = {};
   const POWTRACK = { drops: 0, t: 0, since: 0 }; // POW pacing: random drops need a 7 s gap, a supply drop guarantees one every ~12.5 s
 
   const G = S.game = {

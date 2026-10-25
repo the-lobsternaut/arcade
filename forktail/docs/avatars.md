@@ -46,11 +46,21 @@ Lines are dealt from a shuffled deck rather than drawn at random, reshuffled onl
 runs out, and a fresh deck never opens on the line the old one closed with — so a long list
 genuinely does not repeat.
 
-## No art, no portrait
+## No art, no character
 
-A character without an entry in the pack gets the call-sign badge the UI falls back to. There is
-no procedural stand-in. Drawing an approximation of someone who has no art looked worse than
-admitting it, and the generator that did it cost 120 MB of canvases per character.
+A character with no entry in the pack does not appear and does not speak. Not a badge, not a
+stand-in, nothing: the card is never built. Drawing an approximation of someone who has no art
+looked worse than admitting it, and the monogram badge that replaced the generator was worse
+again - a card with three initials in it is a character you have never seen pretending to be one
+you have, which is how the ferry pilots, the copilots and the wingmen all ended up briefing you
+from behind a disc.
+
+Where that line still has to be delivered, Halo delivers it, because she has a face and she has
+the radio: she reads out a copilot's file, names the wingman who went down, and keeps the only
+voice in the air. None of it is hard-coded to her - every surface asks whether the speaker has a
+portrait and takes the other path if not - so a character starts talking for herself the moment
+her art lands in the pack, including the allied liaisons in boss briefings, who are picked from
+whoever has been painted.
 
 ## Inspecting
 

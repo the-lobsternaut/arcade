@@ -31,30 +31,27 @@ window.SKY = window.SKY || {};
   const UI = S.ui = { open: null };
   const CTRL = ST.CONTROLLER;
 
-  // ---------------------------------------------------------------- character view (3D; no-WebGL fallback is a plain call-sign badge, no static portraits)
+  // ---------------------------------------------------------------- character view
+  // A character either has a portrait in the pack or does not appear. The monogram badge is gone:
+  // a card built around three initials is a character you have never seen pretending to be one you
+  // have, and that is how the ferry pilots, the copilots and the wingmen all ended up talking. What
+  // they had to say that mattered is Halo's to say - she has the face and she has the radio.
+  // hasFace is the gate, and every surface that puts words on the screen asks it before it builds
+  // a card, so nothing is ever drawn around an empty box.
   const charBox = h('div', 'charview');
-  const charBadge = h('div', 'charbadge'); charBox.appendChild(charBadge);
-  let charWho = null;
+  const hasFace = (who) => !!(S.chars && S.chars.ok && S.chars.has && S.chars.has(who));
   function showChar(slot, who, look, opt) {
-    opt = opt || {};
+    if (!hasFace(who)) return false;
     if (charBox.parentNode !== slot) slot.appendChild(charBox);
-    charWho = who;
-    const C = S.chars;
-    if (C && C.ok && C.has && C.has(who)) { charBadge.style.display = 'none'; C.attach(charBox); C.show(who, look, opt); }
-    else {
-      const g = who === 'halo' ? null : ST.guest(who) || ST.copilot(who) || ST.WINGMEN[who];
-      const nm = who === 'halo' ? 'HALO' : g ? (g.name || g.call || who) : who;
-      charBadge.style.display = ''; charBadge.textContent = nm.split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
-      charBadge.style.background = 'radial-gradient(circle at 50% 35%, ' + ((look && look.c2) || '#4a4e54') + ', ' + ((look && look.c1) || '#1a1e24') + ')';
-    }
+    S.chars.attach(charBox); S.chars.show(who, look, opt || {});
+    return true;
   }
   function charTalk(sec) { if (S.chars && S.chars.ok) S.chars.talk(sec); }
   function charExpr(e) { if (S.chars && S.chars.ok) S.chars.expr(e); }
-  function hideChar() { if (S.chars && S.chars.ok) S.chars.hide(); if (charBox.parentNode) charBox.parentNode.removeChild(charBox); charWho = null; }
+  function hideChar() { if (S.chars && S.chars.ok) S.chars.hide(); if (charBox.parentNode) charBox.parentNode.removeChild(charBox); }
 
   // ---------------------------------------------------------------- layout helpers
   function field() { const r = $('#cv').getBoundingClientRect(), a = $('#app').getBoundingClientRect(); return { x: r.left - a.left, y: r.top - a.top, w: r.width, h: r.height, aw: a.width, ah: a.height }; }
-  function landscape() { const f = field(); return f.aw - f.w >= 2 * 230; }
   function flagBar(g) {
     // neutral color stripe for the dossier badge (national colors for Allies; plain gunmetal for Axis - no insignia)
     const C = { usa: ['#3a5aa8', '#e8e4dc', '#c83a3a'], uk: ['#2a3a7a', '#e8e4dc', '#c8323a'], ussr: ['#c8323a', '#c8323a', '#e0c040'], china: ['#2a3a8a', '#e8e4dc', '#c8323a'], france: ['#2a4a9a', '#e8e4dc', '#c8323a'],
@@ -67,14 +64,35 @@ window.SKY = window.SKY || {};
     return '<span class="flag">' + c.map((x) => '<i style="background:' + x + '"></i>').join('') + '</span>';
   }
 
-  // ---------------------------------------------------------------- radio toasts (in-flight)
-  // A radio call is someone talking to you, so you should be able to see who. The old strip ran the
-  // full width of the field with a 58px disc of a face in it, which at arm's length on a phone was
-  // a thumbnail of a thumbnail. It is now a card in the upper left - 40% of the width, a third of
-  // the height - with the portrait taking everything the text does not, and an X to send it away
-  // early. Every call comes from the same corner so you always know where to look.
-  const toast = h('div', 'toast hidden'); ui.appendChild(toast);
-  toast.innerHTML = '<button class="tx" aria-label="Close">\u00d7</button><div class="tslot"></div><div class="ttext"><b></b><span></span></div>';
+  // ---------------------------------------------------------------- transmissions
+  // Everything anyone says - a radio call, the objectives, a boss briefing - is this one card in
+  // this one place: across the top of the field, the portrait a 2:3 box on the left and the text
+  // beside it a little over half as tall, so the card is an L and the corner under the text stays
+  // open onto the game. It used to be three shapes in four places, and a briefing put the enemy's
+  // card against the bottom edge, which on a phone is under your thumb. One shape in one place
+  // means you always know where to look and never lose the bottom of the field to a caption.
+  function cardGeom(el) {
+    const f = field();
+    // Always the field's top left corner, just under the HUD. On a phone held upright the card is
+    // exactly as wide as the field; turn the phone and the field becomes a narrow strip down the
+    // middle with dead letterbox either side, so the card borrows the right-hand margin rather
+    // than squeezing a face into eighty pixels. Same corner, same shape, more room when there is
+    // room going spare.
+    const w = Math.max(f.w, Math.min(360, f.aw - f.x - 8));
+    const aw = Math.round(w * 0.30), ah = Math.round(aw * 1.5);
+    // Flush to the right edge of the screen it is an open-ended strip; short of it, it needs a
+    // right-hand edge of its own or it reads as cut off.
+    el.classList.toggle('inset', f.x + w < f.aw - 2);
+    el.style.left = f.x + 'px';
+    el.style.top = (f.y + f.h * 0.085) + 'px';
+    el.style.width = w + 'px';
+    el.style.height = ah + 'px';
+    const slot = $('.tslot', el), txt = $('.ttext', el);
+    if (slot) slot.style.width = aw + 'px';
+    if (txt) txt.style.height = Math.round(ah * 0.56) + 'px';
+  }
+  const toast = h('div', 'tcard radio hidden'); ui.appendChild(toast);
+  toast.innerHTML = '<div class="tslot"></div><div class="ttext"><button class="tx" aria-label="Close">\u00d7</button><b></b><span></span></div>';
   $('.tx', toast).addEventListener('click', (e) => { e.stopPropagation(); hideToast(); });
   let toastT = 0, toastBusy = false;
   function radioToast(who, look, name, text, expr, sec) {
@@ -84,23 +102,11 @@ window.SKY = window.SKY || {};
     // having. It also puts a card over the corner you are trying to read the pattern in.
     const wd = G.world && G.world();
     if (wd && wd.phase === 'boss') return;
-    // No face, no transmission. A card with an empty box where someone should be is worse than
-    // the line going unsaid.
-    if (!S.chars || !S.chars.ok || !S.chars.has || !S.chars.has(who)) return;
+    if (!hasFace(who)) return;
     sec = sec || Math.min(7, 2.4 + text.length * 0.045);
-    // Across the top, full width. The portrait is a 2:3 box in the upper left and the text sits
-    // beside it but only forty percent as tall, so the card is an L and the corner under the text
-    // stays open onto the game.
-    const f = field();
-    const aw = Math.round(f.w * 0.30), ah = Math.round(aw * 1.5);
-    toast.style.left = f.x + 'px';
-    toast.style.top = (f.y + f.h * 0.085) + 'px';
-    toast.style.width = f.w + 'px';
-    toast.style.height = ah + 'px';
-    $('.tslot', toast).style.width = aw + 'px';
-    $('.ttext', toast).style.height = Math.round(ah * 0.40) + 'px';
+    cardGeom(toast);
     toast.classList.remove('hidden'); toast.classList.add('show');
-    $('b', toast).textContent = name; $('span', toast).textContent = text;
+    $('.ttext > b', toast).textContent = name; $('.ttext > span', toast).textContent = text;
     showChar($('.tslot', toast), who, look, { expr: expr || 'neutral', framing: 'fit', animate: true });
     charTalk(Math.min(sec - 0.5, text.length * 0.05));
     A.sfx('radio'); toastBusy = true;
@@ -108,16 +114,22 @@ window.SKY = window.SKY || {};
     clearTimeout(toastT); toastT = setTimeout(hideToast, sec * 1000);
   }
   function hideToast() { clearTimeout(toastT); toast.classList.remove('show'); toast.classList.add('hidden'); if (toastBusy && !brief.active && !UI.open) hideChar(); toastBusy = false; if (G.holdPlay) G.holdPlay(false); }
-  const RADIO_EXPR = { lowfuel: 'worried', nofuel: 'worried', damage: 'worried', critical: 'worried', winglost: 'worried', clear: 'salute', chatter: 'smile', bossPhase: 'fiery' };
+  const RADIO_EXPR = { lowfuel: 'worried', nofuel: 'worried', damage: 'worried', critical: 'worried', winglost: 'worried', clear: 'salute' };
   G.hooks.radio = function (kind) {
-    const run = G.run();
-    // Only Halo talks to you in the air. The crew chiming in meant two voices competing for the
-    // same corner of the screen, and she is the one on the radio.
-    if (kind === 'winglost') { const w = G.debug.info().wing.find((q) => q.dead); const wm = w ? ST.WINGMEN[G.WINGMEN[w.slot].id] : null; return radioToast('halo', CTRL.look, 'HALO', (wm ? wm.down + ' ' : '') + pick(CTRL.lines.winglost), 'worried', 6); }
+    // Only Halo talks to you in the air, and only about something you now have to do: the tanks,
+    // the airframe, a side of the formation that just went empty, the target going down. The crew
+    // used to chime in, and a timer used to put a line up every half minute whether anything had
+    // happened or not - two voices and a metronome over the one corner you need to read.
+    if (kind === 'winglost') {
+      const w = G.debug.info().wing.find((q) => q.dead);
+      const wm = w ? ST.WINGMEN[G.WINGMEN[w.slot].id] : null;
+      // She reads the plot, so she names who went down rather than quoting a pilot you cannot see.
+      const call = wm ? (/"([^"]+)"/.exec(wm.name) || [, wm.name])[1] : null;
+      return radioToast('halo', CTRL.look, 'HALO', (call ? call + ' is down. ' : '') + pick(CTRL.lines.winglost), 'worried', 6);
+    }
     const lines = CTRL.lines[kind]; if (!lines) return;
     radioToast('halo', CTRL.look, 'HALO - ' + CTRL.name, pick(lines), RADIO_EXPR[kind] || 'neutral');
   };
-  G.hooks.bossPhase = function (n) { radioToast('halo', CTRL.look, 'HALO', CTRL.lines.bossPhase[Math.min(2, n - 1)] || CTRL.lines.bossPhase[0], 'fiery', 3.2); };
   G.hooks.stageStart = function () {
     const L = G.level(); if (!L) return;
     setTimeout(() => radioToast('halo', CTRL.look, 'HALO - Objectives: ' + L.name, L.obj, 'hip', 7), 2400);
@@ -127,32 +139,20 @@ window.SKY = window.SKY || {};
   // ---------------------------------------------------------------- boss briefing cards
   const brief = { active: false, seq: [], i: 0, card: null, t: 0, typer: 0, autoT: 0, done: null };
   function briefCard(item) {
-    const card = h('div', 'brief ' + item.side + (item.who === 'halo' ? ' ctrl' : ''));
-    card.innerHTML = '<div class="bslot"></div><div class="btext"><div class="bhead">' + (item.flag || '') + '<div><b>' + esc(item.name) + '</b><small>' + esc(item.sub) + '</small></div></div>' +
-      '<p class="bline"></p><div class="bfoot"><span>' + (item.side === 'axis' ? 'ENEMY TRANSMISSION' : item.who === 'halo' ? 'HALO CONTROL' : 'ALLIED LIAISON') + '</span><span>TAP TO CONTINUE</span></div><i class="btimer"></i></div>';
+    // The same card as a radio call, with a typed line and a timer bar on it.
+    const card = h('div', 'tcard hidden ' + item.side + (item.who === 'halo' ? ' ctrl' : ''));
+    card.innerHTML = '<div class="tslot"></div><div class="ttext"><b>' + (item.flag || '') + esc(item.name) + '</b>' +
+      '<small>' + esc(item.sub) + '</small><span class="bline"></span><i class="btimer"></i></div>';
     return card;
-  }
-  function placeCard(card, item) {
-    const f = field(), land = landscape();
-    card.classList.toggle('side', land);
-    if (land) {
-      const sw = Math.min(360, (f.aw - f.w) / 2 - 16);
-      card.style.width = sw + 'px'; card.style.top = (f.y + f.h * 0.3) + 'px';
-      card.style.left = item.who === 'halo' ? (f.x + f.w + 10) + 'px' : (f.x - sw - 10) + 'px';
-    } else {
-      card.style.width = (f.w - 12) + 'px'; card.style.left = (f.x + 6) + 'px';
-      if (item.who === 'halo') card.style.top = (f.y + f.h * 0.1) + 'px';
-      else { card.style.top = ''; card.style.bottom = (f.ah - (f.y + f.h) + f.h * 0.14) + 'px'; }
-    }
   }
   function nextBrief() {
     clearInterval(brief.typer); clearTimeout(brief.autoT);
-    if (brief.card) { const c = brief.card; c.classList.add('out'); setTimeout(() => c.remove(), 260); brief.card = null; }
+    if (brief.card) { const c = brief.card; c.classList.remove('show'); c.classList.add('hidden'); setTimeout(() => c.remove(), 300); brief.card = null; }
     if (brief.i >= brief.seq.length) { endBrief(); return; }
     const item = brief.seq[brief.i++];
-    const card = briefCard(item); ui.appendChild(card); placeCard(card, item); brief.card = card;
-    requestAnimationFrame(() => card.classList.add('in'));
-    showChar($('.bslot', card), item.who, item.look, { expr: item.expr, framing: 'fit', animate: true });   // whole portrait, and let a clip run while she speaks
+    const card = briefCard(item); ui.appendChild(card); cardGeom(card); brief.card = card;
+    requestAnimationFrame(() => { card.classList.remove('hidden'); card.classList.add('show'); });
+    showChar($('.tslot', card), item.who, item.look, { expr: item.expr, framing: 'fit', animate: true });   // whole portrait, and let a clip run while she speaks
     A.sfx('static');
     const p = $('.bline', card), txt = item.text; let n = 0;
     brief.typer = setInterval(() => { n += 2; p.textContent = txt.slice(0, n); if (n >= txt.length) { clearInterval(brief.typer); } }, 28);
@@ -173,7 +173,11 @@ window.SKY = window.SKY || {};
   window.addEventListener('keydown', (e) => { if (brief.active && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); nextBrief(); } }, true);
   G.hooks.bossBrief = function (type, level) {
     const run = G.run();
-    const ally = ST.pickGuest(level, run, 'ally'), axis = ST.pickGuest(level, run, 'axis');
+    // Pick only from the people who have a portrait. An unpainted character used to get a card
+    // with her initials in it, which is how a ferry pilot nobody has drawn yet ended up being the
+    // one to brief you. The pool opens up on its own as the art lands.
+    const faced = (g) => hasFace(g.id);
+    const ally = ST.pickGuest(level, run, 'ally', faced), axis = ST.pickGuest(level, run, 'axis', faced);
     const seq = [];
     for (const g of [ally, axis]) {
       if (!g) continue;
@@ -184,8 +188,9 @@ window.SKY = window.SKY || {};
     }
     const last = seq.length ? brief_lastGuest(ally, axis) : null;
     const jealous = last && last.side === 'ally';
-    seq.push({ who: 'halo', look: CTRL.look, side: 'ally', name: CTRL.name + ' "' + CTRL.callsign + '"', sub: CTRL.title, flag: '<span class="flag halo"><i></i></span>',
+    if (hasFace('halo')) seq.push({ who: 'halo', look: CTRL.look, side: 'ally', name: CTRL.name + ' "' + CTRL.callsign + '"', sub: CTRL.title, flag: '<span class="flag halo"><i></i></span>',
       text: last ? ST.controllerAfter(last) : pick(CTRL.lines.afterAxis), expr: jealous ? 'jealous' : 'fiery' });
+    if (!seq.length) return false;        // nobody with a face to say it: straight on to the boss
     startBrief(seq, () => G.briefDone());
     return true;
   };
@@ -208,18 +213,19 @@ window.SKY = window.SKY || {};
 
   // ---------------------------------------------------------------- hangar
   let hangarTab = 'arm';
-  function sayCtrl(p, text, expr) {
-    const box = $('.hsay', p); if (!box) return;
-    $('.htext', box).textContent = text; $('.hname', box).textContent = 'HALO - ' + CTRL.name;
-    showChar($('.hslot', p), 'halo', CTRL.look, { expr: expr || 'hip', framing: 'bust', animate: true }); charTalk(Math.min(5, text.length * 0.04));
-    $('.hact', box).innerHTML = '';
-  }
-  function sayOther(p, who, look, name, text, expr) {
-    const box = $('.hsay', p);
+  // Both panels and the victory screen use the same markup - portrait top left, name and line
+  // beside it - so a character is always in the same place however you got to them. Each returns
+  // whether it actually spoke: no portrait, no card, and the caller says it another way.
+  function say(p, who, look, name, text, expr, framing) {
+    const box = $('.hsay', p); if (!box || !hasFace(who)) return false;
     $('.htext', box).textContent = text; $('.hname', box).textContent = name;
-    showChar($('.hslot', p), who, look, { expr: expr || 'smile', framing: 'bust', animate: true }); charTalk(Math.min(5, text.length * 0.04));
+    showChar($('.hslot', p), who, look, { expr: expr, framing: framing || 'bust', animate: true });
+    charTalk(Math.min(5, text.length * 0.04));
     $('.hact', box).innerHTML = '';
+    return true;
   }
+  function sayCtrl(p, text, expr) { return say(p, 'halo', CTRL.look, 'HALO - ' + CTRL.name, text, expr || 'hip'); }
+  function sayOther(p, who, look, name, text, expr) { return say(p, who, look, name, text, expr || 'smile'); }
   function openHangar() {
     const p = panel('hangar', 'HANGAR DECK');
     A.music('hangar');
@@ -331,7 +337,10 @@ window.SKY = window.SKY || {};
   }
   function describeCopilot(p, c) {
     const st = G.copilotState(c.id), run = G.run();
-    sayOther(p, c.id, c.look, c.name + ' - ' + c.role, c.bio + ' ' + pick(c.chime), c.look.pose === 'salute' ? 'salute' : 'smile');
+    // Halo reads out the file. The copilot's own chime needs a face to come from, and when one
+    // arrives this goes back to being him talking.
+    if (!sayOther(p, c.id, c.look, c.name + ' - ' + c.role, c.bio + ' ' + pick(c.chime), c.look.pose === 'salute' ? 'salute' : 'smile'))
+      sayCtrl(p, c.name + ', ' + c.role.toLowerCase() + '. ' + c.bio + ' ' + c.pros + ', but ' + c.cons + '.', 'hip');
     const act = $('.hact', p);
     if (st === 'owned') act.appendChild(btn('TAKE ON BOARD', 'go', () => { G.setCopilot(c.id); renderHangar(p); sayCtrl(p, pick(CTRL.lines.copilotPick), c.look.g === 'f' ? 'jealous' : 'smile'); }));
     else if (st === 'buyable') act.appendChild(btn('UNLOCK ' + c.unlock.cost + ' M', run.merit >= c.unlock.cost ? 'go' : 'dis', () => { if (G.setCopilot(c.id)) { renderHangar(p); sayCtrl(p, pick(CTRL.lines.copilotPick), c.look.g === 'f' ? 'jealous' : 'smile'); } else sayCtrl(p, pick(CTRL.lines.poor), 'jealous'); }));
@@ -340,7 +349,10 @@ window.SKY = window.SKY || {};
   function describeWing(p, i) {
     const stats = G.stats(), run = G.run(), wid = G.WINGMEN[i].id, wm = ST.WINGMEN[wid];
     if (i >= stats.wingSlots) return sayCtrl(p, 'No slot for a wingman yet. Buy Wingman Slot ' + (i ? 'II' : 'I') + ' in the SUPPORT branch.', 'hip');
-    sayOther(p, wid, wm.look, wm.name, run.wing[i] ? wm.join : 'Replacement pilot standing by. Same callsign, new airplane.', run.wing[i] ? 'salute' : 'worried');
+    if (!sayOther(p, wid, wm.look, wm.name, run.wing[i] ? wm.join : 'Replacement pilot standing by. Same callsign, new airplane.', run.wing[i] ? 'salute' : 'worried'))
+      sayCtrl(p, run.wing[i] ? wm.name + ' has slot ' + (i + 1) + ' and is on your wing.'
+                             : wm.name + '\u2019s slot is empty. A replacement is standing by - same callsign, new airplane.',
+              run.wing[i] ? 'salute' : 'worried');
     if (!run.wing[i]) $('.hact', p).appendChild(btn('REPLACE ' + G.WING_COST + ' M', run.merit >= G.WING_COST ? 'go' : 'dis', () => { if (G.replaceWing(i)) { renderHangar(p); sayCtrl(p, pick(CTRL.lines.wingbuy), 'smile'); } else sayCtrl(p, pick(CTRL.lines.poor), 'jealous'); }));
   }
   UI.hangarTab = (t) => { hangarTab = t; if (UI.open && UI.open.classList.contains('hangar')) { renderHangar(UI.open); [...$('.tabs', UI.open).children].forEach((c) => c.classList.toggle('on', c.dataset.tab === t)); } };
@@ -398,7 +410,7 @@ window.SKY = window.SKY || {};
     const p = panel('victory', 'CAMPAIGN COMPLETE');
     A.music('hangar');
     const body = $('.pbody', p);
-    body.innerHTML = '<div class="vleft"><div class="vslot"></div></div>' +
+    body.innerHTML = '<div class="hleft"><div class="hslot"></div><div class="hsay"><div class="hname"></div><div class="htext"></div><div class="hact"></div></div></div>' +
       '<div class="vmain">' +
         '<h2 class="vhead">THE PACIFIC IS OURS</h2>' +
         '<p class="vsub">' + esc(st.won) + ' of ' + esc(st.total) + ' battles flown &middot; ' + esc(st.played) + ' sorties</p>' +
@@ -427,10 +439,7 @@ window.SKY = window.SKY || {};
     const line = st.bonusLeft
       ? 'That is the last of the main line. Every bird came home because you flew it. There are still bonus runs on the board if you want them.'
       : 'Every battle on the board, flown and won. Whatever they put up next, you have already beaten it. Nice flying.';
-    showChar($('.vslot', p), 'halo', CTRL.look, { expr: 'smile', framing: 'bust', animate: true });
-    charTalk(Math.min(6, line.length * 0.04));
-    const say = h('div', 'vsay'); say.innerHTML = '<b>HALO - ' + esc(CTRL.name) + '</b><p>' + esc(line) + '</p>';
-    $('.vleft', p).appendChild(say);
+    if (!sayCtrl(p, line, 'smile')) $('.hleft', p).remove();
     meritTxt(p);
   }
   UI.openVictory = openVictory;
@@ -440,11 +449,14 @@ window.SKY = window.SKY || {};
   function openDossier(back) {
     const p = panel('dossier', 'DOSSIER');
     const met = SV ? SV.dossier() : [];
-    $('.pmerit', p).innerHTML = met.length + ' / ' + ST.GUESTS.length + ' MET';
+    // An unmet card is a "???" you can still fill in. An unpainted one never becomes anything, so
+    // it is not on the board at all and the count is out of the people who can actually turn up.
+    const roster = ST.GUESTS.filter((g) => hasFace(g.id));
+    $('.pmerit', p).innerHTML = roster.filter((g) => met.indexOf(g.id) >= 0).length + ' / ' + roster.length + ' MET';
     const body = $('.pbody', p);
     body.innerHTML = '<div class="dleft"><div class="hslot"></div><div class="hsay"><div class="hname"></div><div class="htext"></div><div class="hact"></div></div></div><div class="dgrid"></div>';
     const grid = $('.dgrid', p);
-    for (const g of ST.GUESTS) {
+    for (const g of roster) {
       const ok = met.indexOf(g.id) >= 0;
       const c = h('div', 'dcard ' + (ok ? g.side : 'locked'));
       c.innerHTML = ok ? flagBar(g) + '<b>' + esc(g.country) + '</b><small>' + esc(g.rank + ' ' + g.name) + '</small>' : '<b>???</b><small>Meet her in a boss briefing</small>';
@@ -453,8 +465,7 @@ window.SKY = window.SKY || {};
     }
     const bar = h('div', 'hbar'); body.appendChild(bar);
     bar.appendChild(btn('BACK', 'ghost', () => { closePanel(); if (back) openHangar(); }));
-    $('.hname', p).textContent = 'HALO'; $('.htext', p).textContent = 'Everyone you\'ve met on the radio. Tap one for her file. Purely professional, of course.';
-    showChar($('.hslot', p), 'halo', CTRL.look, { expr: 'jealous', framing: 'bust', animate: true });
+    sayCtrl(p, 'Everyone you\'ve met on the radio. Tap one for her file. Purely professional, of course.', 'jealous');
   }
   UI.openDossier = openDossier;
   G.hooks.dossier = () => openDossier(false);
@@ -494,7 +505,15 @@ window.SKY = window.SKY || {};
   // ---------------------------------------------------------------- title / misc
   const syncChip = h('div', 'syncchip hidden'); ui.appendChild(syncChip);
   let chipT = 0;
-  if (SV) SV.on((m, kind) => { syncChip.textContent = m; syncChip.className = 'syncchip ' + kind; clearTimeout(chipT); chipT = setTimeout(() => syncChip.classList.add('hidden'), 2600); });
+  // Off the bottom edge and out of the way. A panel already reports sync in its own header, and
+  // in the air there is nowhere for it to go that is not the HUD or someone's face - so it only
+  // ever shows on the title screen, which is the one place it has room and the one place you
+  // might be waiting to hear it.
+  if (SV) SV.on((m, kind) => {
+    if (UI.open || G.state() === 'play') { syncChip.classList.add('hidden'); return; }
+    syncChip.textContent = m; syncChip.className = 'syncchip ' + kind;
+    clearTimeout(chipT); chipT = setTimeout(() => syncChip.classList.add('hidden'), 2600);
+  });
   G.hooks.title = function () {
     closePanel();
     if (!SV) return;
@@ -508,5 +527,6 @@ window.SKY = window.SKY || {};
     });
   };
   G.hooks.gameover = () => { hideToast(); };
-  window.addEventListener('resize', () => { if (brief.card) placeCard(brief.card, brief.seq[brief.i - 1]); });
+  // one geometry, so a rotate or a keyboard just re-measures whichever card is up
+  window.addEventListener('resize', () => { if (brief.card) cardGeom(brief.card); if (toastBusy) cardGeom(toast); });
 })(window.SKY);

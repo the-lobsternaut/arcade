@@ -116,9 +116,11 @@
     if (ph > h.bphase) {
       h.bphase = ph; h.atkT = 1.5; h.atk2T = 2.5; h.atk3T = 1;
       for (const t of h.turrets) if (t.kind === 'bridge') t.armored = false;
+      // The phase change announces itself four ways already - the popup, the shake, the warning
+      // horn and the P-number on the boss bar. A voice line on top of that told you nothing you
+      // could not see, and it arrived over the corner you were reading the pattern in.
       popup(h.x, Math.max(HUD_H + 30, h.y), 'PHASE ' + ph, '#ff9c8a', 10); shake = Math.max(shake, 6); A.sfx('warning');
       for (let i = 0; i < 4; i++) explosion(h.x + rand(-h.w * 0.35, h.w * 0.35), h.y + rand(-h.h * 0.4, h.h * 0.4), rand(14, 22), i * 0.12, h.kind === 'ship' ? 0 : 0, h.kind === 'ship' ? 4 : 40);
-      hook('bossPhase', ph, h.type);
     }
   }
   function updateHulks(dt) {

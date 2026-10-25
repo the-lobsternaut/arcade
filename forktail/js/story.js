@@ -13,15 +13,18 @@ window.SKY = window.SKY || {};
   const GUEST_BY = {}; GUESTS.forEach((g) => { GUEST_BY[g.id] = g; });
   const CP_BY = {}; COPILOTS.forEach((c) => { CP_BY[c.id] = c; });
 
-  function pickGuest(level, run, side) {
+  // `ok` is an optional gate the caller supplies - the UI passes "has a portrait", because a
+  // character with no art cannot be put on screen and should not be picked to brief you.
+  function pickGuest(level, run, side, ok) {
     const met = (run && run.met) || [];
-    const want = (g) => side === 'ally' ? g.side === 'ally' : g.side !== 'ally';
+    const want = (g) => (side === 'ally' ? g.side === 'ally' : g.side !== 'ally') && (!ok || ok(g));
     const th = level ? THEATER[level.id] || 'pacific' : 'pacific';
     const tied = (level ? level.nations : []).map((id) => GUEST_BY[id]).filter((g) => g && want(g));
     const fresh = tied.filter((g) => met.indexOf(g.id) < 0);
     if (fresh.length) return fresh[(Math.random() * fresh.length) | 0];
     const pool = GUESTS.filter((g) => want(g) && met.indexOf(g.id) < 0);
     const src = pool.length ? pool : (tied.length ? tied : GUESTS.filter(want));
+    if (!src.length) return null;
     let tot = 0; const w = src.map((g) => { const v = g.th.indexOf(th) >= 0 ? 3 : 1; tot += v; return v; });
     let r = Math.random() * tot;
     for (let i = 0; i < src.length; i++) { r -= w[i]; if (r <= 0) return src[i]; }

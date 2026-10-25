@@ -15,11 +15,11 @@
           stageT += dt;
           // A callout does not stop you flying, it just clears the sky: the stage clock keeps
           // running but nothing new is launched, and anything already up leaves. Reading a
-          // transmission should not cost you a wing.
+          // transmission should not cost you a wing. Nothing speaks on a timer any more, so every
+          // callout is now something you did - took damage, ran the tanks down, lost a wingman.
           if (hold) { if (enemies.length) enemies.length = 0; if (eb.length) eb.length = 0; }
           else while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
           if (stageT >= stageLen && evIdx >= events.length) { phase = 'warning'; phaseT = 0; A.music(null); A.sfx('warning'); }
-          chatterT -= dt; if (chatterT <= 0) { chatterT = rand(22, 34); radio('chatter'); }
         } else if (phase === 'warning') { if (phaseT > 2.4) { phase = 'briefing'; phaseT = 0; briefWait = 0; eb.length = 0; if (!hook('bossBrief', bossTypeFor(stage), curLevel())) G.briefDone(); } }
         else if (phase === 'clear') {
           if (phaseT > 1.6 && !clearJingle) { clearJingle = true; A.sfx('clear'); }

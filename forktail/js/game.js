@@ -92,7 +92,7 @@ window.SKY = window.SKY || {};
   try { hiscore = parseInt(localStorage.getItem('sky1943.hi') || '0', 10) || 0; } catch (e) {}
   let player = null, boss = null, run = null, ST = null;
   const nukes = [], pb = [], eb = [], enemies = [], hulks = [], pickups = [], parts = [], fx = [], popups = [], islands = [], clouds = [], warns = [], zones = [], wing = [], groups = new Map();
-  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, chatterT = 20, powSpawned = 0, playT = 0, radioCd = {};
+  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, powSpawned = 0, playT = 0, radioCd = {};
   const POWTRACK = { drops: 0, t: 0, since: 0 }; // POW pacing: random drops need a 7 s gap, a supply drop guarantees one every ~12.5 s
 
   const G = S.game = {
@@ -652,9 +652,11 @@ window.SKY = window.SKY || {};
     if (ph > h.bphase) {
       h.bphase = ph; h.atkT = 1.5; h.atk2T = 2.5; h.atk3T = 1;
       for (const t of h.turrets) if (t.kind === 'bridge') t.armored = false;
+      // The phase change announces itself four ways already - the popup, the shake, the warning
+      // horn and the P-number on the boss bar. A voice line on top of that told you nothing you
+      // could not see, and it arrived over the corner you were reading the pattern in.
       popup(h.x, Math.max(HUD_H + 30, h.y), 'PHASE ' + ph, '#ff9c8a', 10); shake = Math.max(shake, 6); A.sfx('warning');
       for (let i = 0; i < 4; i++) explosion(h.x + rand(-h.w * 0.35, h.w * 0.35), h.y + rand(-h.h * 0.4, h.h * 0.4), rand(14, 22), i * 0.12, h.kind === 'ship' ? 0 : 0, h.kind === 'ship' ? 4 : 40);
-      hook('bossPhase', ph, h.type);
     }
   }
   function updateHulks(dt) {
@@ -1126,11 +1128,11 @@ window.SKY = window.SKY || {};
           stageT += dt;
           // A callout does not stop you flying, it just clears the sky: the stage clock keeps
           // running but nothing new is launched, and anything already up leaves. Reading a
-          // transmission should not cost you a wing.
+          // transmission should not cost you a wing. Nothing speaks on a timer any more, so every
+          // callout is now something you did - took damage, ran the tanks down, lost a wingman.
           if (hold) { if (enemies.length) enemies.length = 0; if (eb.length) eb.length = 0; }
           else while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
           if (stageT >= stageLen && evIdx >= events.length) { phase = 'warning'; phaseT = 0; A.music(null); A.sfx('warning'); }
-          chatterT -= dt; if (chatterT <= 0) { chatterT = rand(22, 34); radio('chatter'); }
         } else if (phase === 'warning') { if (phaseT > 2.4) { phase = 'briefing'; phaseT = 0; briefWait = 0; eb.length = 0; if (!hook('bossBrief', bossTypeFor(stage), curLevel())) G.briefDone(); } }
         else if (phase === 'clear') {
           if (phaseT > 1.6 && !clearJingle) { clearJingle = true; A.sfx('clear'); }
