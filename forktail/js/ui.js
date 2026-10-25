@@ -423,15 +423,19 @@ window.SKY = window.SKY || {};
     const foot = $('.mfoot', p); if (!foot) return;
     foot.innerHTML = '';
     const prev = stepLevel(i, -1), next = stepLevel(i, 1);
-    const arrow = (glyph, to, name) => {
-      const b = btn(glyph, 'arrow' + (to < 0 ? ' dis' : ''), () => { if (to >= 0) selectLevel(p, to, true); });
+    // The triangle is drawn, not typed. U+25C0/U+25B6 are emoji on iOS: they come out as blue
+    // system chevrons that ignore the button's colour, so a live arrow and a dead one looked
+    // identical and both looked switched off.
+    const arrow = (dir, to, name) => {
+      const b = btn('', 'arrow ' + dir + (to < 0 ? ' dis' : ''), () => { if (to >= 0) selectLevel(p, to, true); });
+      b.appendChild(h('i'));
       b.setAttribute('aria-label', name); return b;
     };
-    foot.appendChild(arrow('\u25c0', prev, 'Previous battle'));
+    foot.appendChild(arrow('prev', prev, 'Previous battle'));
     // One label whether you have flown it or not: it is the same mission either way, and a button
     // that says REPLAY reads like a lesser version of the thing rather than the thing.
     foot.appendChild(btn('PLAY MISSION', 'go' + (playable ? '' : ' dis'), () => { if (playable) { closePanel(); G.launchLevel(i); } }));
-    foot.appendChild(arrow('\u25b6', next, 'Next battle'));
+    foot.appendChild(arrow('next', next, 'Next battle'));
   }
   G.hooks.map = () => { openMap(); return true; };
 

@@ -170,7 +170,10 @@ html, body {
 .mfoot { flex: none; padding-top: 8px; display: flex; gap: 6px; }
 .mfoot .btn { flex: 1; width: 100%; padding: 13px 12px; font-size: 15px; letter-spacing: 0.14em; }
 /* the step arrows keep their own width - the mission button takes the rest */
-.mfoot .arrow { flex: none; width: 56px; padding: 13px 0; font-size: 18px; letter-spacing: 0; line-height: 1; }
+.mfoot .arrow { flex: none; width: 56px; padding: 13px 0; display: flex; align-items: center; justify-content: center; }
+.mfoot .arrow i { display: block; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.mfoot .arrow.prev i { border-right: 12px solid currentColor; }
+.mfoot .arrow.next i { border-left: 12px solid currentColor; }
 .ptopbtn { margin-left: auto; padding: 5px 14px; font-size: 12px; }
 .mlist { flex: 1; overflow-y: auto; min-height: 60px; }
 .mitem { padding: 5px 7px; border-left: 3px solid #6a6e74; margin-bottom: 3px; cursor: pointer; background: rgba(255,255,255,0.04); position: relative; }
