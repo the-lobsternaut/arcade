@@ -403,14 +403,35 @@ window.SKY = window.SKY || {};
     [...$('.mlist', p).children].forEach((c, k) => c.classList.toggle('sel', k === i));
     // focus 'snap' jumps the chart (opening it), true glides (picking from the list)
     if (S.map3d && S.map3d.ok) { if (focus) S.map3d.focus(i, focus === 'snap'); else S.map3d.select(i); }
-    if (st === 'fog') { d.innerHTML = '<h3>UNDISCOVERED</h3><p>Reconnaissance has not reached this area yet. Win the battles before it to lift the fog.</p>'; const f0 = $('.mfoot', p); if (f0) f0.innerHTML = ''; return; }
+    if (st === 'fog') { d.innerHTML = '<h3>UNDISCOVERED</h3><p>Reconnaissance has not reached this area yet. Win the battles before it to lift the fog.</p>'; mapFoot(p, i, false); return; }
     const bossN = l.bossName || ({ bossShip: 'Battleship', bossBomber: 'Heavy bomber', carrier: 'Carrier' })[l.boss];
     const rec = run.done[l.id];
     d.innerHTML = '<h3>' + esc(l.name) + '</h3><small>' + esc(l.date) + ' - ' + esc(l.loc) + '</small><p>' + esc(l.blurb) + '</p>' +
       '<p class="mmeta">BOSS <b>' + esc(bossN) + '</b> &nbsp; ' + esc(l.theme.tod.toUpperCase()) + ' / ' + esc(l.theme.weather.toUpperCase()) + ' &nbsp; THREAT ' + '&#9733;'.repeat(l.tier) + '</p>' +
-      (rec ? '<p class="mrec"><i class="medal ' + rec.medal + '"></i> BEST ' + rec.score + ' - replay pays Merit</p>' : '');
-    const foot = $('.mfoot', p);
-    if (foot) { foot.innerHTML = ''; foot.appendChild(btn(rec ? 'REPLAY MISSION' : 'FLY MISSION', 'go', () => { closePanel(); G.launchLevel(i); })); }
+      (rec ? '<p class="mrec"><i class="medal ' + rec.medal + '"></i> BEST ' + rec.score + ' - flying it again pays less Merit</p>' : '');
+    mapFoot(p, i, true);
+  }
+  // Stepping through the battles. On a phone the list is hidden and the chart is the only way to
+  // choose, which makes a pin you cannot see a battle you cannot reach - the arrows are that way
+  // in. They skip the fogged entries, because there is nothing to pick on one, and they stop at
+  // the ends instead of wrapping, so running out of arrow tells you where you are in the war.
+  function stepLevel(from, dir) {
+    for (let i = from + dir; i >= 0 && i < LV.list.length; i += dir) if (levelState(i) !== 'fog') return i;
+    return -1;
+  }
+  function mapFoot(p, i, playable) {
+    const foot = $('.mfoot', p); if (!foot) return;
+    foot.innerHTML = '';
+    const prev = stepLevel(i, -1), next = stepLevel(i, 1);
+    const arrow = (glyph, to, name) => {
+      const b = btn(glyph, 'arrow' + (to < 0 ? ' dis' : ''), () => { if (to >= 0) selectLevel(p, to, true); });
+      b.setAttribute('aria-label', name); return b;
+    };
+    foot.appendChild(arrow('\u25c0', prev, 'Previous battle'));
+    // One label whether you have flown it or not: it is the same mission either way, and a button
+    // that says REPLAY reads like a lesser version of the thing rather than the thing.
+    foot.appendChild(btn('PLAY MISSION', 'go' + (playable ? '' : ' dis'), () => { if (playable) { closePanel(); G.launchLevel(i); } }));
+    foot.appendChild(arrow('\u25b6', next, 'Next battle'));
   }
   G.hooks.map = () => { openMap(); return true; };
 
