@@ -4,6 +4,7 @@
     alt = alt !== undefined ? alt : (vy > 0 ? 3 : 40);
     fx.push({ id: gid++, x, y, t: -(delay || 0), dur: 0.55 + s * 0.014, s, vy: vy || 0, rot: rand(TAU), spin: rand(-1, 1), alt });
     if (!delay) {
+      A.haptic(5 + s * 0.6);   // bigger blast, longer buzz
       const n = Math.min(14, 4 + (s / 2) | 0);
       for (let i = 0; i < n; i++) {
         const a = rand(TAU), sp = rand(30, 50 + s * 4);

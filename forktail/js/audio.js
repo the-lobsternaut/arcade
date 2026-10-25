@@ -47,6 +47,18 @@ window.SKY = window.SKY || {};
     if (!A.musicOff && want) { const w = want; want = null; cur = null; A.music(w); }
   };
   A.toggleMusic = function () { A.setMusicOff(!A.musicOff); return A.musicOff; };
+  // Haptics. navigator.vibrate is the only web API for this, and iOS Safari does not implement it,
+  // so on an iPhone these calls do nothing at all - the code is here because it costs nothing and
+  // works everywhere that does. Throttled: a nuke spawns a dozen blasts in two frames and nobody
+  // wants their phone to buzz twelve times.
+  let lastBuzz = 0;
+  A.haptic = function (ms) {
+    if (A.muted || !navigator.vibrate) return;
+    const now = performance.now();
+    if (now - lastBuzz < 70) return;
+    lastBuzz = now;
+    try { navigator.vibrate(Math.max(8, Math.min(45, ms | 0))); } catch (e) {}
+  };
   A.applySettings = function (o) { if (!o) return; if ('muted' in o) A.setMuted(o.muted); if ('musicOff' in o) A.setMusicOff(o.musicOff); };
   A.settings = () => ({ muted: A.muted, musicOff: A.musicOff });
 
@@ -151,7 +163,11 @@ window.SKY = window.SKY || {};
   }
   A.loaded = {};
   A.tracks = TR;
+  // Music is off for now - the tracks and the plumbing are all still here, so turning it back on
+  // is deleting this line. Nothing downstream has to know; every call site still calls music().
+  const MUSIC_DISABLED = true;
   A.music = function (name) {
+    if (MUSIC_DISABLED) return;
     if (name && ALIAS[name]) name = ALIAS[name];
     if (name === cur && curSrc) return;
     want = name;

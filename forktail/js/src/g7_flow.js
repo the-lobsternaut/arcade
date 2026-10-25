@@ -4,7 +4,6 @@
     time += dt; stateT += dt;
     if (paused || state === 'loading' || state === 'hangar' || state === 'map') { if (state === 'hangar' || state === 'map') updateScenery(dt * 0.3); return; }
     if (phase === 'briefing') { briefWait += dt; if (briefWait > 40) G.briefDone(); dt *= 0.0; }
-    if (hold) dt = 0;   // a transmission is up: the war waits
     updateScenery(dt);
     if (shake > 0) shake = Math.max(0, shake - dt * 18);
     if (state === 'play' || state === 'gameover') {
@@ -14,7 +13,11 @@
         if (phase === 'intro') { if (phaseT > 2.3) { phase = 'stage'; phaseT = 0; } }
         else if (phase === 'stage') {
           stageT += dt;
-          while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
+          // A callout does not stop you flying, it just clears the sky: the stage clock keeps
+          // running but nothing new is launched, and anything already up leaves. Reading a
+          // transmission should not cost you a wing.
+          if (hold) { if (enemies.length) enemies.length = 0; if (eb.length) eb.length = 0; }
+          else while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
           if (stageT >= stageLen && evIdx >= events.length) { phase = 'warning'; phaseT = 0; A.music(null); A.sfx('warning'); }
           chatterT -= dt; if (chatterT <= 0) { chatterT = rand(22, 34); radio('chatter'); }
         } else if (phase === 'warning') { if (phaseT > 2.4) { phase = 'briefing'; phaseT = 0; briefWait = 0; eb.length = 0; if (!hook('bossBrief', bossTypeFor(stage), curLevel())) G.briefDone(); } }
@@ -199,9 +202,8 @@
   G.state = () => state;
   G.phase = () => phase;
   G.isPaused = () => paused;
-  // Held for a transmission. Being shot at while someone is talking to you means you read none of
-  // it, so the fighters go home, their rounds go with them, and nothing moves again until she has
-  // finished. A boss stays - it is the level - but frozen, so the screen is safe to read either way.
+  // Held for a transmission: the sky empties and stays empty until it clears. You keep flying -
+  // only the opposition is suspended. A boss stays, because it is the level.
   G.holdPlay = function (v) {
     v = !!v;
     if (hold === v || state !== 'play') { if (!v) hold = false; return; }

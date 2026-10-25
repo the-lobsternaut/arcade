@@ -97,7 +97,8 @@ window.SKY = window.SKY || {};
   const RADIO_EXPR = { lowfuel: 'worried', nofuel: 'worried', damage: 'worried', critical: 'worried', winglost: 'worried', clear: 'salute', chatter: 'smile', bossPhase: 'fiery' };
   G.hooks.radio = function (kind) {
     const run = G.run();
-    if (kind === 'chatter' && run && Math.random() < 0.5) { const cp = ST.copilot(run.copilot); if (cp) return radioToast(cp.id, cp.look, cp.name + ' (copilot)', pick(cp.chime), 'smile'); }
+    // Only Halo talks to you in the air. The crew chiming in meant two voices competing for the
+    // same corner of the screen, and she is the one on the radio.
     if (kind === 'winglost') { const w = G.debug.info().wing.find((q) => q.dead); const wm = w ? ST.WINGMEN[G.WINGMEN[w.slot].id] : null; return radioToast('halo', CTRL.look, 'HALO', (wm ? wm.down + ' ' : '') + pick(CTRL.lines.winglost), 'worried', 6); }
     const lines = CTRL.lines[kind]; if (!lines) return;
     radioToast('halo', CTRL.look, 'HALO - ' + CTRL.name, pick(lines), RADIO_EXPR[kind] || 'neutral');

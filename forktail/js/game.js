@@ -350,6 +350,7 @@ window.SKY = window.SKY || {};
     alt = alt !== undefined ? alt : (vy > 0 ? 3 : 40);
     fx.push({ id: gid++, x, y, t: -(delay || 0), dur: 0.55 + s * 0.014, s, vy: vy || 0, rot: rand(TAU), spin: rand(-1, 1), alt });
     if (!delay) {
+      A.haptic(5 + s * 0.6);   // bigger blast, longer buzz
       const n = Math.min(14, 4 + (s / 2) | 0);
       for (let i = 0; i < n; i++) {
         const a = rand(TAU), sp = rand(30, 50 + s * 4);
@@ -876,7 +877,7 @@ window.SKY = window.SKY || {};
     for (let i = 0; i < 10; i++) { const a = rand(TAU), r = rand(0.2, 0.9) * R; parts.push({ k: 'blacksmoke', x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, vx: Math.cos(a) * 14, vy: Math.sin(a) * 14 - 4, life: rand(1.6, 2.6), max: 2.6, s: rand(26, 42), alt: 6, va: 14 }); }
     for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; parts.push({ k: 'splash', x: x + Math.cos(a) * R * 0.85, y: y + Math.sin(a) * R * 0.85, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, life: 1.1, max: 1.1, s: rand(16, 24), rot: rand(TAU), alt: 0 }); }
     flashT = Math.max(flashT, 0.4); shake = Math.max(shake, 16);
-    A.sfx('nuke');
+    A.sfx('nuke'); A.haptic(45);   // the one blast that earns a long one
     blastCount++;
     lastBlast = { x: +x.toFixed(1), y: +y.toFixed(1), r: +R.toFixed(1), dmg, hits, cleared, n: blastCount };
   }
@@ -887,7 +888,7 @@ window.SKY = window.SKY || {};
     const R = b.owner ? 14 : sp.R;
     blast(x, y, R, b.dmg, false, true);
     fx.push({ id: gid++, x, y, t: 0, dur: 0.55 + R * 0.012, s: R * 1.1, vy: SCROLL, rot: rand(TAU), spin: rand(-1, 1), alt: 1, ground: true });
-    splashAt(x, y, R * 1.1, 2); shake = Math.max(shake, 2.5); A.sfx('bombhit');
+    splashAt(x, y, R * 1.1, 2); shake = Math.max(shake, 2.5); A.sfx('bombhit'); A.haptic(22);
     if (b.btype === 'cluster') {
       for (let i = 0; i < sp.n; i++) {
         const a = i / sp.n * TAU + rand(-0.2, 0.2), r = rand(16, 30) * ST.bombRadius;
@@ -1110,7 +1111,6 @@ window.SKY = window.SKY || {};
     time += dt; stateT += dt;
     if (paused || state === 'loading' || state === 'hangar' || state === 'map') { if (state === 'hangar' || state === 'map') updateScenery(dt * 0.3); return; }
     if (phase === 'briefing') { briefWait += dt; if (briefWait > 40) G.briefDone(); dt *= 0.0; }
-    if (hold) dt = 0;   // a transmission is up: the war waits
     updateScenery(dt);
     if (shake > 0) shake = Math.max(0, shake - dt * 18);
     if (state === 'play' || state === 'gameover') {
@@ -1120,7 +1120,11 @@ window.SKY = window.SKY || {};
         if (phase === 'intro') { if (phaseT > 2.3) { phase = 'stage'; phaseT = 0; } }
         else if (phase === 'stage') {
           stageT += dt;
-          while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
+          // A callout does not stop you flying, it just clears the sky: the stage clock keeps
+          // running but nothing new is launched, and anything already up leaves. Reading a
+          // transmission should not cost you a wing.
+          if (hold) { if (enemies.length) enemies.length = 0; if (eb.length) eb.length = 0; }
+          else while (evIdx < events.length && events[evIdx].t <= stageT) runEvent(events[evIdx++].ev);
           if (stageT >= stageLen && evIdx >= events.length) { phase = 'warning'; phaseT = 0; A.music(null); A.sfx('warning'); }
           chatterT -= dt; if (chatterT <= 0) { chatterT = rand(22, 34); radio('chatter'); }
         } else if (phase === 'warning') { if (phaseT > 2.4) { phase = 'briefing'; phaseT = 0; briefWait = 0; eb.length = 0; if (!hook('bossBrief', bossTypeFor(stage), curLevel())) G.briefDone(); } }
@@ -1305,9 +1309,8 @@ window.SKY = window.SKY || {};
   G.state = () => state;
   G.phase = () => phase;
   G.isPaused = () => paused;
-  // Held for a transmission. Being shot at while someone is talking to you means you read none of
-  // it, so the fighters go home, their rounds go with them, and nothing moves again until she has
-  // finished. A boss stays - it is the level - but frozen, so the screen is safe to read either way.
+  // Held for a transmission: the sky empties and stays empty until it clears. You keep flying -
+  // only the opposition is suspended. A boss stays, because it is the level.
   G.holdPlay = function (v) {
     v = !!v;
     if (hold === v || state !== 'play') { if (!v) hold = false; return; }

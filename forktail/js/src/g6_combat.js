@@ -22,7 +22,7 @@
     for (let i = 0; i < 10; i++) { const a = rand(TAU), r = rand(0.2, 0.9) * R; parts.push({ k: 'blacksmoke', x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, vx: Math.cos(a) * 14, vy: Math.sin(a) * 14 - 4, life: rand(1.6, 2.6), max: 2.6, s: rand(26, 42), alt: 6, va: 14 }); }
     for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; parts.push({ k: 'splash', x: x + Math.cos(a) * R * 0.85, y: y + Math.sin(a) * R * 0.85, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, life: 1.1, max: 1.1, s: rand(16, 24), rot: rand(TAU), alt: 0 }); }
     flashT = Math.max(flashT, 0.4); shake = Math.max(shake, 16);
-    A.sfx('nuke');
+    A.sfx('nuke'); A.haptic(45);   // the one blast that earns a long one
     blastCount++;
     lastBlast = { x: +x.toFixed(1), y: +y.toFixed(1), r: +R.toFixed(1), dmg, hits, cleared, n: blastCount };
   }
@@ -33,7 +33,7 @@
     const R = b.owner ? 14 : sp.R;
     blast(x, y, R, b.dmg, false, true);
     fx.push({ id: gid++, x, y, t: 0, dur: 0.55 + R * 0.012, s: R * 1.1, vy: SCROLL, rot: rand(TAU), spin: rand(-1, 1), alt: 1, ground: true });
-    splashAt(x, y, R * 1.1, 2); shake = Math.max(shake, 2.5); A.sfx('bombhit');
+    splashAt(x, y, R * 1.1, 2); shake = Math.max(shake, 2.5); A.sfx('bombhit'); A.haptic(22);
     if (b.btype === 'cluster') {
       for (let i = 0; i < sp.n; i++) {
         const a = i / sp.n * TAU + rand(-0.2, 0.2), r = rand(16, 30) * ST.bombRadius;
