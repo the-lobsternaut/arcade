@@ -30,9 +30,14 @@
         // index.html has not reached this device yet. Leave it alone rather than reload forever.
         if (new URL(location.href).searchParams.get('u') === v) return;
         found = v;
+        // Only a mission in progress is worth protecting from a reload. Anywhere else - title,
+        // hangar, campaign map, the end of a run - the run is already saved and there is nothing
+        // to lose, so take the new build rather than waiting to be asked. The banner existed for
+        // every one of those states, and a banner is a single point of failure: when the tap that
+        // dismisses it stopped working, a device could sit on a stale build indefinitely with no
+        // way out, which is exactly what happened.
         const G = window.SKY && window.SKY.game, st = G && G.state && G.state();
-        if (st === 'title' || st === 'loading' || !st) apply();   // nothing to interrupt: just take it
-        else show();
+        if (st === 'play') show(); else apply();
       })
       .catch(() => {})                                            // offline: ask again later
       .then(() => { busy = false; });
