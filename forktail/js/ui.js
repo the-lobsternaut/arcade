@@ -79,7 +79,10 @@ window.SKY = window.SKY || {};
     // than squeezing a face into eighty pixels. Same corner, same shape, more room when there is
     // room going spare.
     const w = Math.max(f.w, Math.min(360, f.aw - f.x - 8));
-    const aw = Math.round(w * 0.30), ah = Math.round(aw * 1.5);
+    // The portrait is twice what it was, which is most of the card's width - so the text no
+    // longer sits beside it, it sits behind it and slides out. Capped against the field height
+    // too, because a face that eats half the sky is a face you cannot fly around.
+    const aw = Math.round(Math.min(w * 0.52, f.h * 0.44 / 1.5)), ah = Math.round(aw * 1.5);
     // Flush to the right edge of the screen it is an open-ended strip; short of it, it needs a
     // right-hand edge of its own or it reads as cut off.
     el.classList.toggle('inset', f.x + w < f.aw - 2);
@@ -88,12 +91,23 @@ window.SKY = window.SKY || {};
     el.style.width = w + 'px';
     el.style.height = ah + 'px';
     const slot = $('.tslot', el), txt = $('.ttext', el);
-    if (slot) slot.style.width = aw + 'px';
-    if (txt) txt.style.height = Math.round(ah * 0.56) + 'px';
+    if (slot) { slot.style.width = aw + 'px'; }
+    if (txt) {
+      const left = Math.round(aw * 0.56);
+      txt.style.left = left + 'px';
+      txt.style.top = Math.round(ah * 0.14) + 'px';
+      txt.style.height = Math.round(ah * 0.7) + 'px';
+      // text starts clear of the portrait, and the panel tucks exactly far enough left to vanish
+      // behind it rather than a round percentage that leaves a corner showing
+      txt.style.paddingLeft = (aw - left + 10) + 'px';
+      el.style.setProperty('--tuck', -(w - aw) + 'px');
+    }
   }
   const toast = h('div', 'tcard radio hidden'); ui.appendChild(toast);
-  toast.innerHTML = '<div class="tslot"></div><div class="ttext"><button class="tx" aria-label="Close">\u00d7</button><b></b><span></span></div>';
-  $('.tx', toast).addEventListener('click', (e) => { e.stopPropagation(); hideToast(); });
+  toast.innerHTML = '<div class="tslot"></div><div class="ttext"><b></b><span></span></div>';
+  // The card is its own dismiss button - portrait or panel, either one sends the pair back off
+  // the left edge. A close cross on a card this size is a small target guarding a large one.
+  toast.addEventListener('pointerdown', (e) => { e.stopPropagation(); hideToast(); });
   let toastT = 0, toastBusy = false;
   function radioToast(who, look, name, text, expr, sec) {
     if (UI.open || brief.active) return;
@@ -114,7 +128,7 @@ window.SKY = window.SKY || {};
     clearTimeout(toastT); toastT = setTimeout(hideToast, sec * 1000);
   }
   function hideToast() { clearTimeout(toastT); toast.classList.remove('show'); toast.classList.add('hidden'); if (toastBusy && !brief.active && !UI.open) hideChar(); toastBusy = false; if (G.holdPlay) G.holdPlay(false); }
-  const RADIO_EXPR = { lowfuel: 'worried', nofuel: 'worried', damage: 'worried', critical: 'worried', winglost: 'worried', clear: 'salute' };
+  const RADIO_EXPR = { damage: 'worried', critical: 'worried', winglost: 'worried', clear: 'salute' };
   G.hooks.radio = function (kind) {
     // Only Halo talks to you in the air, and only about something you now have to do: the tanks,
     // the airframe, a side of the formation that just went empty, the target going down. The crew
@@ -280,7 +294,7 @@ window.SKY = window.SKY || {};
       tb.appendChild(tree);
     } else if (hangarTab === 'tech') {
       const lo = h('div', 'loadout');
-      lo.innerHTML = 'GUNS <b>' + G.GUNS[run.gun.type].name + ' ' + 'I'.repeat(run.gun.lvl) + '</b> &nbsp; BOMBS <b>' + G.BOMBS[run.bomb.type].name + ' ' + 'I'.repeat(run.bomb.lvl) + '</b> &nbsp; ARMOR <b>' + stats.armorMax + '</b> &nbsp; FUEL <b>' + stats.fuelMax + '</b>';
+      lo.innerHTML = 'GUNS <b>' + G.GUNS[run.gun.type].name + ' ' + 'I'.repeat(run.gun.lvl) + '</b> &nbsp; BOMBS <b>' + G.BOMBS[run.bomb.type].name + ' ' + 'I'.repeat(run.bomb.lvl) + '</b> &nbsp; ARMOR <b>' + stats.armorMax + '</b>';
       tb.appendChild(lo);
       const tree = h('div', 'tree');
       for (const br of ['ARMOR', 'GUNS', 'BOMBS', 'SUPPORT']) {
@@ -296,7 +310,7 @@ window.SKY = window.SKY || {};
       }
       tb.appendChild(tree);
       const pw = h('div', 'powlist', '<h4>POWER-UPS (permanent, level 1-3)</h4>');
-      for (const fam of ['gun', 'bomb', 'fuel', 'repair']) for (const k of G.POW[fam]) {
+      for (const fam of ['gun', 'bomb', 'repair']) for (const k of G.POW[fam]) {
         const it = h('span', 'pw ' + fam, esc(G.POW_INFO[k][0])); it.title = G.POW_INFO[k][1];
         it.addEventListener('click', () => { A.sfx('click'); sayCtrl(p, G.POW_INFO[k][1] + '. ' + POWTALK[fam], 'smile'); });
         pw.appendChild(it);
@@ -325,7 +339,7 @@ window.SKY = window.SKY || {};
       tb.appendChild(grid);
     }
   }
-  const POWTALK = { gun: 'Gun family, round brass medal. Shoot it to cycle the type; grab the same type again to level it up.', bomb: 'Bomb family, steel hexagon. Same deal: shoot to cycle, collect the same one to level it.', fuel: 'Yellow can. Fuel drains slowly, but it does drain.', repair: 'Green cross. Patches armor. Pretty important if you like being alive.' };
+  const POWTALK = { gun: 'Gun family, round brass medal. Shoot it to cycle the type; grab the same type again to level it up.', bomb: 'Bomb family, steel hexagon. Same deal: shoot to cycle, collect the same one to level it.', repair: 'Green cross. Patches armor, and it is the only thing anyone will drop for you out there.' };
   function describeTech(p, t) {
     const st = G.techState(t.id), run = G.run();
     const armHint = (t.br === 'GUNS' || t.br === 'BOMBS') && st === 'owned' ? ' Pick which one you carry on the ARMAMENT tab.' : '';

@@ -166,6 +166,11 @@ window.SKY_META = {
   "w": 8.66,
   "h": 8.66
  },
+ "logo": {
+  "src": "assets/logo.webp",
+  "w": 240,
+  "h": 93.24
+ },
  "medal": {
   "src": "assets/medal.webp",
   "w": 20,

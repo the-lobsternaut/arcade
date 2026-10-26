@@ -17,7 +17,7 @@ python3 server.py --port 8091 --bind 0.0.0.0     # static files + save API (stdl
 | Arrows / WASD | move |
 | Space / Z | fire (hold) and drop bombs in BOMBS mode |
 | Q / Tab | switch GUNS / BOMBS mode |
-| X / Shift | loop (costs fuel, dodges everything) |
+| X / Shift | loop (free, dodges everything, short recovery) |
 | P / Esc | pause |
 | M | mute all sound, B toggles music only |
 | F | fullscreen |
@@ -26,7 +26,7 @@ python3 server.py --port 8091 --bind 0.0.0.0     # static files + save API (stdl
 Touch: drag anywhere to fly (the plane moves relative to your finger), and fire is automatic while touching. The LOOP and MODE buttons sit bottom-right; a two-finger tap also loops.
 
 ## Systems
-- **Fuel and armor are separate bars.** Fuel drains slowly over time (about 476 s on a full tank) and is refilled by FUEL cans. Armor drops when you are hit and is restored by REPAIR kits. Battle damage shows at 70%, 45% and 20% armor (smoke, fire, wobble) on the player and on enemies.
+- **Armor is the only bar.** It drops when you are hit and is restored by REPAIR kits, which are the only thing that drops in a mission - everything else you carry was bought in the hangar. Battle damage shows at 70%, 45% and 20% armor (smoke, fire, wobble) on the player and on enemies. There is no fuel: it was a second clock running against you that you could not act on, and the only honest answer to it was a yellow can.
 - **Weapon modes.** GUNS and BOMBS each have their own power-up family (gun: spread / laser / shotgun / auto-gun / gun-up; bomb: cluster / napalm / torpedo / rapid / N-bomb). Power-ups are permanent for the run and level 1 to 3; picking up the same type levels it up.
 - **N-bomb:** 50x bomb damage, radius = 1/3 of the screen width, vaporises every enemy bullet, sinks ships, never hurts you. It has a long flash, 3D shockwave rings, a mushroom cloud and camera shake.
 - **POW pacing:** random drops need a 7 s gap and a supply drop guarantees one about every 12.5 s, so you get one roughly every 10 to 15 s.
@@ -48,7 +48,7 @@ A character is one painted portrait, or a short clip, living in `assets/pack.bin
 **A character with no portrait does not appear and does not speak.** No badge, no stand-in, no card. Where that line still has to reach you, HALO says it - she reads a copilot's file, names the wingman who went down, and is the only voice in the air. Nothing is hard-coded to her: every surface asks whether the speaker has a portrait and takes the other path if not, so anyone starts talking for herself the moment her art lands in the pack. See `docs/avatars.md` for adding one.
 
 ### Where anyone speaks
-One card, one place. A radio call, the mission objectives and a boss briefing are the same shape in the same spot - across the top of the field, portrait on the left, text beside it - and the hangar, dossier and victory screens all put the portrait top left with the line next to it. Nothing speaks from the bottom of the screen, and nothing speaks on a timer: in the air HALO calls fuel, damage, a lost wingman and the target going down, and that is all.
+One card, one place. A radio call, the mission objectives and a boss briefing are the same shape in the same spot - across the top of the field, portrait on the left, text beside it - and the hangar, dossier and victory screens all put the portrait top left with the line next to it. Nothing speaks from the bottom of the screen, and nothing speaks on a timer: in the air HALO calls damage, a lost wingman and the target going down, and that is all. The card is its own dismiss button: the text panel slides out from behind the portrait, and a tap on either sends the pair back off the left edge.
 
 ## Extending
 - Nations / guests and levels live in `assets/pack.bin`, not in a source file - unpack it with `python3 tools/packassets.py unpack`, edit `assets/dialog.json`, pack it again (`docs/avatars.md`). `GUESTS` entries are name, rank, role, theaters `th`, `lines`, `note`, `q` (HALO's quip), `look`; allied lines that mention a boss's parts are matched to that boss automatically. `LEVELS` entries are `after` ids that unlock it, `theme`, enemy `mix`, `boss`, `obj` and tied `nations`. `js/story.js` is the logic that reads them; map coordinates live in `COORD` in `js/map3d.js`.

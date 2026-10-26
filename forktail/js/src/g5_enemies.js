@@ -212,12 +212,16 @@
             const r = t.big ? 9 : 6, bx = tx + Math.sin(t.ang) * r, by = ty - Math.cos(t.ang) * r;
             t.muzzle = 0.08;
             ebAlt = altOf(h);
+            // Half the rounds, on a beat. A turret that fires every 3.0 seconds is a turret you
+            // can count; one that fires every 2.6 to 3.4 is weather. The spreads are wider too -
+            // a two-round fan at 0.16 radians is a needle aimed at where you were, and the only
+            // way past it is to already have moved. Opened up, it is a gap you can fly into.
             if (t.kind === 'main') {
-              if (h.isBoss) { warnAt(p.x + rand(-10, 10), p.y + rand(-10, 10), 22, 1.15, 14); aimedShot(bx, by, 0.16, 2); t.cd = rand(2.6, 3.4) / firem(); }
-              else { aimedShot(bx, by, 0.16, 2); t.cd = rand(2.2, 3) / firem(); }
-            } else if (t.kind === 'tail') { aimedShot(bx, by, 0.08, 3 + (h.bphase - 1), bspeed() * 1.1); t.cd = rand(1.4, 2) / firem(); }
-            else if (t.kind === 'dorsal') { aimedShot(bx, by, 0.2, 2); t.cd = rand(1.6, 2.2) / firem(); }
-            else { aimedShot(bx, by, 0, 1); t.cd = rand(1.6, 2.4) / firem(); }
+              if (h.isBoss) { warnAt(p.x + rand(-10, 10), p.y + rand(-10, 10), 22, 1.15, 14); aimedShot(bx, by, 0.3, 1); t.cd = 3.0 / firem(); }
+              else { aimedShot(bx, by, 0.3, 1); t.cd = 2.6 / firem(); }
+            } else if (t.kind === 'tail') { aimedShot(bx, by, 0.22, 2, bspeed() * 1.05); t.cd = 1.8 / firem(); }
+            else if (t.kind === 'dorsal') { aimedShot(bx, by, 0.34, 1); t.cd = 2.0 / firem(); }
+            else { aimedShot(bx, by, 0, 1); t.cd = 2.2 / firem(); }
           }
         }
       }
@@ -227,16 +231,17 @@
     sweep(hulks, (h) => h.dead && h.deadT > (h.kind === 'ship' ? 4.5 : 2.6));
   }
   function bossAttacks(h, dt) {
-    h.atkT -= dt; h.atk2T -= dt; h.atk3T -= dt;
+    h.atkT -= dt; h.atk2T -= dt; h.atk3T -= dt; h.atk4T = (h.atk4T || 0) - dt;
     const ph = h.bphase, f = firem();
     if (h.type === 'bossShip') {
-      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y - 18, 10 + Math.min(8, D() * 2), 72, h.t); h.atkT = (ph === 3 ? 2.2 : 4) / f; }
+      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y - 18, 5 + Math.min(4, D()), 72, h.ringOff = (h.ringOff || 0) + 0.4); h.atkT = (ph === 3 ? 2.4 : 4) / f; }
       if (ph >= 2 && h.atk2T <= 0) { for (const s of [-1, 1]) spawnPT(clamp(h.x + s * (h.w * 0.5 + 18), 14, W - 14), h.y - h.h * 0.2); h.atk2T = 7.5; }
-      if (h.atk3T <= 0) { aimedShot(h.x, h.y - 30, 0.13, ph === 3 ? 7 : 5, bspeed() * 0.9); h.atk3T = (ph === 3 ? 2.4 : 4.2) / f; }
-      if (ph === 3 && Math.random() < dt * 0.8) ring(h.x, h.y, 8, 60, h.t * 2);
+      if (h.atk3T <= 0) { aimedShot(h.x, h.y - 30, 0.26, ph === 3 ? 4 : 3, bspeed() * 0.9); h.atk3T = (ph === 3 ? 2.6 : 4.2) / f; }
+      // the extra phase-three ring is on the clock as well, not on a dice roll
+      if (ph === 3 && h.atk4T <= 0) { ring(h.x, h.y, 4, 60, (h.ringOff || 0) + 0.8); h.atk4T = 2.0 / f; }
     } else if (h.type === 'bossBomber') {
       if (!h.arrived) return;
-      if (h.atkT <= 0) { ring(h.x, h.y, 12 + Math.min(8, D() * 2), 70, h.t * 0.7); h.atkT = (ph === 3 ? 2.6 : 3.4) / f; }
+      if (h.atkT <= 0) { ring(h.x, h.y, 6 + Math.min(4, D()), 70, h.ringOff = (h.ringOff || 0) + 0.45); h.atkT = (ph === 3 ? 2.6 : 3.4) / f; }
       if (h.atk2T <= 0) {
         if (ph === 1) { const g = newGroup(2, false); for (const s of [-1, 1]) spawnZero({ pat: 'escort', dir: s, x0: clamp(h.x + s * 40, 20, W - 20), y0: h.y + 10, delay: 0 }, false, g); h.atk2T = 7; }
         else if (ph === 2) { // carpet of flak, telegraphed across the screen
@@ -245,12 +250,13 @@
           h.atk2T = 6;
         } else { const g = newGroup(3, false); for (let i = 0; i < 3; i++) { const e = spawnZero({ pat: 'dive', dir: 1, x0: rand(30, W - 30), y0: 0, delay: i * 0.4 }, false, g); e.kami = true; e.canFire = false; } h.atk2T = 5.5; }
       }
-      if (ph === 3) { h.spiral = (h.spiral || 0) + dt; if (h.atk3T <= 0) { const a = h.spiral * 3.1; for (const o of [0, Math.PI]) eb.push({ x: h.x, y: h.y + 10, vx: Math.cos(a + o) * 80, vy: Math.sin(a + o) * 80, k: 0 }); h.atk3T = 0.14 / Math.sqrt(f); } }
+      // the spiral keeps both arms - the shape is the whole point of it - and halves its rate
+      if (ph === 3) { h.spiral = (h.spiral || 0) + dt; if (h.atk3T <= 0) { const a = h.spiral * 2.2; for (const o of [0, Math.PI]) eb.push({ x: h.x, y: h.y + 10, alt: altOf(h), vx: Math.cos(a + o) * 80, vy: Math.sin(a + o) * 80, k: 0 }); h.atk3T = 0.28 / Math.sqrt(f); } }
     } else if (h.type === 'carrier') {
-      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y, 10 + Math.min(8, D() * 2), 70, h.t); h.atkT = (ph === 3 ? 2.4 : 3.8) / f; }
+      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y, 5 + Math.min(4, D()), 70, h.ringOff = (h.ringOff || 0) + 0.42); h.atkT = (ph === 3 ? 2.4 : 3.8) / f; }
       if (ph >= 2 && h.atk2T <= 0) { waveBombers(clamp(h.x, 60, W - 60)); h.atk2T = 9; }
-      if (h.atk3T <= 0) { aimedShot(h.x + h.w * 0.3, h.y, 0.15, ph === 3 ? 5 : 3); h.atk3T = (ph === 3 ? 1.8 : 3.2) / f; }
-      if (ph === 3 && Math.random() < dt * 1.2) { const a = h.t * 2.4; for (let i = 0; i < 3; i++) eb.push({ x: h.x, y: h.y, vx: Math.cos(a + i * 2.09) * 75, vy: Math.sin(a + i * 2.09) * 75, k: 0 }); }
+      if (h.atk3T <= 0) { aimedShot(h.x + h.w * 0.3, h.y, 0.3, ph === 3 ? 3 : 2); h.atk3T = (ph === 3 ? 2.0 : 3.2) / f; }
+      if (ph === 3 && h.atk4T <= 0) { const a = h.t * 2.4; for (let i = 0; i < 3; i++) eb.push({ x: h.x, y: h.y, alt: altOf(h), vx: Math.cos(a + i * 2.09) * 75, vy: Math.sin(a + i * 2.09) * 75, k: 0 }); h.atk4T = 1.6 / f; }
     }
   }
   function hitHulk(h, x, y) {
@@ -318,10 +324,9 @@
     eb.length = 0; warns.length = 0;
     for (const e of enemies) if (!e.dead && e.t >= 0) killEnemy(e);
     for (const x of hulks) if (!x.dead && x.pt) killHulk(x);
-    clearBonus = Math.round(player.fuel) * 50 + Math.round(player.armor) * 50;
+    clearBonus = Math.round(player.armor) * 100;      // what you brought home, at the old rate
     addScore(clearBonus);
     merit(150); if (stageHits === 0) { merit(200); popup(W / 2, H * 0.5, 'NO-DAMAGE BONUS +200 MERIT', '#9fe07a', 7); }
-    player.fuel = Math.min(ST.fuelMax, player.fuel + 35);
     A.music(null); A.sting('clear');
     radio('clear');
   }

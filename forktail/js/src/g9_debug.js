@@ -2,7 +2,7 @@
   // ---------------------------------------------------------------- debug / test hooks
   G.debug = {
     info: () => ({ state, paused, phase, stage, level: curLevel() ? curLevel().id : null, stageT: +stageT.toFixed(2), stageLen, score, hiscore, merit: run ? run.merit : 0,
-      fuel: player ? +player.fuel.toFixed(2) : null, armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode, stall: player ? +player.stall.toFixed(2) : 0,
+      armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode,
       gun: run && run.gun, bomb: run && run.bomb, loopT: player ? player.loopT : 0, enemies: enemies.length, hulks: hulks.length, wing: wing.map((w) => ({ slot: w.slot, armor: +w.armor.toFixed(1), dead: w.dead })),
       boss: boss ? { type: boss.type, hp: +boss.hp.toFixed(1), maxhp: boss.maxhp, phase: boss.bphase, parts: boss.turrets.filter((t) => !t.dead).map((t) => t.kind), arrived: boss.arrived, dead: boss.dead } : null,
       pickups: pickups.map((k) => powType(k)), pb: pb.length, eb: eb.length, parts: parts.length, H, player: player ? { x: +player.x.toFixed(1), y: +player.y.toFixed(1) } : null,
@@ -18,7 +18,6 @@
     setWeapon(kind, type, lvl) { if (!run) return; run[kind] = { type, lvl: lvl || 1 }; },
     setMode(m) { if (player) player.mode = m; },
     setArmor(v) { if (player) player.armor = v; },
-    setFuel(v) { if (player) player.fuel = v; },
     spawn(ev) { runEvent(ev); },
     god(v) { if (player) player.inv = v ? 1e9 : 0; },
     nuke: () => ({ dmg: NUKE.dmg, radius: NUKE.radius, spec: bombSpec('nuke', run ? run.bomb.lvl : 1), W, last: lastBlast, count: blastCount, live: nukes.length }),

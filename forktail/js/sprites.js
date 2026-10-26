@@ -112,13 +112,13 @@ window.SKY = window.SKY || {};
   function ell(g, x, y, rx, ry) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); }
 
   // power-up medallions: GUN family = round brass medal (blue core), BOMB family = hexagon (red/orange core),
-  // FUEL = yellow jerrycan tile, REPAIR = white roundel with green cross. [core, dark, label, text color, family]
+  // REPAIR = white roundel with green cross. [core, dark, label, text color, family]
   const POW_STYLE = {
     spread: ['#3a7fd8', '#0f2a55', '3W', '#fff', 'gun'], laser: ['#1ab6cd', '#08434f', 'L', '#fff', 'gun'], shotgun: ['#3a6ac8', '#10245a', 'S', '#fff', 'gun'],
     auto: ['#3a8ae0', '#0c2a5a', 'A', '#fff', 'gun'], gunup: ['#5aa0f0', '#103060', '+', '#fff', 'gun'],
     cluster: ['#e0682a', '#5e2006', 'C', '#fff', 'bomb'], napalm: ['#e8401a', '#601006', 'F', '#fff', 'bomb'], torpedo: ['#d0502a', '#501a08', 'T', '#fff', 'bomb'],
     rapid: ['#e0782a', '#5a2a06', 'R', '#fff', 'bomb'], nuke: ['#f2c21b', '#6b4a00', 'N', '#111', 'bomb'],
-    fuel: ['#f0c020', '#7a5200', 'FUEL', '#1a1200', 'fuel'], repair: ['#f4f4ee', '#9aa0a0', '+', '#1e9a3a', 'repair'],
+    repair: ['#f4f4ee', '#9aa0a0', '+', '#1e9a3a', 'repair'],
   };
   S.POW_STYLE = POW_STYLE;
 
@@ -148,6 +148,7 @@ window.SKY = window.SKY || {};
     SP.clouds = M.clouds.map((e, i) => fromImg('clouds' + i, e.w, e.h));
     SP.cloudsSh = SP.clouds.map((c) => tint(c, '#02101e', sb * 3));
     SP.ocean = fromImg('ocean', M.ocean.w, M.ocean.h);
+    if (M.logo) SP.logo = fromImg('logo', M.logo.w, M.logo.h);
     SP.fireball = fromImg('fireball', 64, 64 * M.fireball.h);
     SP.smoke = fromImg('smoke', 40, 40 * M.smoke.h);
     { const g = SP.smoke.c.getContext('2d'); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(28,24,22,0.55)'; g.fillRect(0, 0, SP.smoke.c.width, SP.smoke.c.height); }
@@ -189,13 +190,12 @@ window.SKY = window.SKY || {};
       const [c, d, label, tc, fam] = POW_STYLE[t];
       SP.pow[t] = mk(22, 22, (g) => {
         g.fillStyle = 'rgba(0,0,0,0.35)';
-        const shape = (r) => fam === 'bomb' ? hex(g, 11, 11, r) : fam === 'fuel' ? rr(g, 11 - r * 0.85, 11 - r, r * 1.7, r * 2, r * 0.35) : ell(g, 11, 11, r, r);
+        const shape = (r) => fam === 'bomb' ? hex(g, 11, 11, r) : ell(g, 11, 11, r, r);
         g.save(); g.translate(0.6, 0.8); shape(9.6); g.fill(); g.restore();
         // rim
         const rim = g.createLinearGradient(0, 2, 0, 20);
         if (fam === 'gun') { rim.addColorStop(0, '#fff0b8'); rim.addColorStop(0.5, '#c8962e'); rim.addColorStop(1, '#6a4a10'); }
         else if (fam === 'bomb') { rim.addColorStop(0, '#e8e8e8'); rim.addColorStop(0.5, '#8a8e94'); rim.addColorStop(1, '#3a3e44'); }
-        else if (fam === 'fuel') { rim.addColorStop(0, '#7a6a30'); rim.addColorStop(1, '#3a3010'); }
         else { rim.addColorStop(0, '#ffffff'); rim.addColorStop(1, '#7a8a80'); }
         g.fillStyle = rim; shape(9.6); g.fill();
         const gr = g.createRadialGradient(8.4, 7.6, 0.5, 11, 11, 8);

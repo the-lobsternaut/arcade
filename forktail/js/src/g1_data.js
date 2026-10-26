@@ -3,7 +3,7 @@ window.SKY = window.SKY || {};
 (function (S) {
   'use strict';
   const A = S.audio, SP = S.sprites;
-  const W = 270, HUD_H = 36, SCROLL = 26, TAU = Math.PI * 2;
+  const W = 270, HUD_H = 46, SCROLL = 26, TAU = Math.PI * 2;
   // ---- altitude is a rendering property, not a game axis. Aircraft fly in the air, anything
   // that floats sits on the water, and that is all it ever decides: which height the renderer
   // draws a thing at, and where its shadow falls. 3D mode is a camera change. It does not gate
@@ -33,17 +33,17 @@ window.SKY = window.SKY || {};
   const POW = { // shooting a medallion cycles within its family
     gun: ['spread', 'laser', 'shotgun', 'auto', 'gunup'],
     bomb: ['cluster', 'napalm', 'torpedo', 'rapid', 'nuke'],
-    fuel: ['fuel'], repair: ['repair'],
+    repair: ['repair'],
   };
   const POW_INFO = {
     spread: ['3W', 'Gun: 3-Way spread'], laser: ['L', 'Gun: piercing laser'], shotgun: ['S', 'Gun: shotgun, eats bullets'], auto: ['A', 'Gun: auto-fire, fast'], gunup: ['+', 'Gun level up'],
     cluster: ['C', 'Bomb: cluster bomblets'], napalm: ['F', 'Bomb: napalm fire carpet'], torpedo: ['T', 'Bomb: torpedo vs ships'], rapid: ['R', 'Bomb: rapid light bombs'], nuke: ['N', 'Bomb: N-bomb, 50x, 1/3 screen'],
-    fuel: ['FUEL', 'Fuel refill'], repair: ['REP', 'Armor repair'],
+    repair: ['REP', 'Armor repair'],
   };
-  // 50x base per-bullet damage (1), radius = 1/3 playfield width. Thirty seconds between shots: a
-  // weapon that clears a third of the screen cannot also be your primary, so the reload is the
-  // balance. Levels shave it down, they do not make it spammable.
-  const NUKE = { dmg: 50, radius: W / 3, cd: 5, lvlCut: 0.1 };
+  // 250x base per-bullet damage (1), radius = 1/3 playfield width. It is meant to settle a boss:
+  // the heaviest hull in the campaign is a tier-5 carrier at about 480, so two of these end it and
+  // three end anything. The reload is the only thing holding it back. Levels shave that down.
+  const NUKE = { dmg: 250, radius: W / 3, cd: 5, lvlCut: 0.1 };
 
   // ---------------------------------------------------------------- tech tree (prerequisites + costs, in MERIT)
   const TECH = [
@@ -62,10 +62,10 @@ window.SKY = window.SKY || {};
     { id: 'b3', br: 'BOMBS', name: 'Fast Racks', cost: 300, req: ['b1'], desc: '20% faster bomb reload.' },
     { id: 'b4', br: 'BOMBS', name: 'Heavy Charge', cost: 350, req: ['b1'], desc: '+20% blast radius.' },
     { id: 'b5', br: 'BOMBS', name: 'N-Yield', cost: 700, req: ['b2', 'b4'], desc: 'N-bomb: +15% radius, 20% faster reload.' },
-    { id: 's1', br: 'SUPPORT', name: 'Drop Tanks', cost: 200, req: [], desc: '+30 max fuel.' },
-    { id: 's2', br: 'SUPPORT', name: 'Lean Mixture', cost: 300, req: ['s1'], desc: 'Fuel drains 25% slower.' },
+    { id: 's1', br: 'SUPPORT', name: 'Salvage Crew', cost: 200, req: [], desc: '+20% Merit from every kill.' },
+    { id: 's2', br: 'SUPPORT', name: 'Field Mechanics', cost: 300, req: ['s1'], desc: 'REPAIR kits patch 50% more armor.' },
     { id: 's3', br: 'SUPPORT', name: 'Pickup Magnet', cost: 250, req: [], desc: 'Power-ups drift toward you.' },
-    { id: 's4', br: 'SUPPORT', name: 'Loop Trim', cost: 300, req: ['s3'], desc: 'Loop costs less and recovers faster.' },
+    { id: 's4', br: 'SUPPORT', name: 'Loop Trim', cost: 300, req: ['s3'], desc: 'Loop recovers more than twice as fast.' },
     { id: 's5', br: 'SUPPORT', name: 'Wingman Slot I', cost: 400, req: [], desc: 'Fly with one wingman.' },
     { id: 's6', br: 'SUPPORT', name: 'Wingman Slot II', cost: 700, req: ['s5'], desc: 'Fly with two wingmen.' },
     { id: 's7', br: 'SUPPORT', name: 'Wingman Armor', cost: 350, req: ['s5'], desc: 'Wingmen are 50% tougher.' },

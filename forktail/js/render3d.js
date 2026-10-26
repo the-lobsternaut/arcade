@@ -1015,14 +1015,13 @@ export function createRenderer(canvas, S) {
     const top = new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.3, roughness: 0.35, metalness: 0.55, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.35 });
     return (powTex[type] = top);
   }
-  const rimMat = { gun: new THREE.MeshStandardMaterial({ color: 0xc8962e, roughness: 0.3, metalness: 0.9 }), bomb: new THREE.MeshStandardMaterial({ color: 0x8a8e94, roughness: 0.35, metalness: 0.9 }), fuel: new THREE.MeshStandardMaterial({ color: 0x8a6a10, roughness: 0.5, metalness: 0.4 }), repair: new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.4, metalness: 0.3 }) };
-  const coinGeo = { gun: new THREE.CylinderGeometry(9, 9, 2.2, 28), repair: new THREE.CylinderGeometry(9, 9, 2.2, 28), bomb: new THREE.CylinderGeometry(9.6, 9.6, 2.4, 6), fuel: new THREE.BoxGeometry(15, 2.6, 18) };
+  const rimMat = { gun: new THREE.MeshStandardMaterial({ color: 0xc8962e, roughness: 0.3, metalness: 0.9 }), bomb: new THREE.MeshStandardMaterial({ color: 0x8a8e94, roughness: 0.35, metalness: 0.9 }), repair: new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.4, metalness: 0.3 }) };
+  const coinGeo = { gun: new THREE.CylinderGeometry(9, 9, 2.2, 28), repair: new THREE.CylinderGeometry(9, 9, 2.2, 28), bomb: new THREE.CylinderGeometry(9.6, 9.6, 2.4, 6) };
   const coinPool = {};
   function coin(fam, type) {
     const pk = coinPool[fam] || (coinPool[fam] = meshPool(() => { const m = new THREE.Mesh(coinGeo[fam], [rimMat[fam], rimMat[fam], rimMat[fam]]); m.castShadow = true; return m; }));
     const m = pk.get();
-    if (fam === 'fuel') { if (m.material[2] !== powMaterial(type)) { m.material = [rimMat.fuel, rimMat.fuel, powMaterial(type), rimMat.fuel, rimMat.fuel, rimMat.fuel]; } }
-    else if (m.material[1] !== powMaterial(type)) m.material = [rimMat[fam], powMaterial(type), rimMat[fam]];
+    if (m.material[1] !== powMaterial(type)) m.material = [rimMat[fam], powMaterial(type), rimMat[fam]];
     return m;
   }
   const ringGeo = new THREE.TorusGeometry(1, 0.06, 6, 64); ringGeo.rotateX(Math.PI / 2);
@@ -1261,7 +1260,7 @@ export function createRenderer(canvas, S) {
         const dmgStage = p.armor / (G.stats ? G.stats().armorMax : 100);
         placeObj(m, p.x, p.y, alt, HERO);   // 10% larger than life, so you can find yourself
         m.rotation.set(0, 0, 0); m.userData.tiltG.rotation.set(pitch, 0, roll + (dmgStage < 0.2 ? Math.sin(time * 9) * 0.08 : 0));
-        spinProps(m, time, p.stall > 0 ? 0.2 : 1);
+        spinProps(m, time, 1);
         const bu = m.userData.body.userData; bu.dmg = Math.max(0, 1 - dmgStage) * 0.95; bu.flash = p.flash > 0 ? 0.6 : 0; bu.seed = 3.7;
         m.visible = !blink;
       }
@@ -1299,9 +1298,9 @@ export function createRenderer(canvas, S) {
         // times and no read at all over the sun's glitter on the water: additive light on a white
         // highlight adds nothing. So: violet, which is in nothing else on screen, and a dark rim
         // UNDER it and wider than it, so the round is legible against bright sea as well as dark.
-        sprite(SMOKE, b.x, b.y, ea, 11.0, 1, 0, 0.03, 0.00, 0.04, 0.88, 2);   // rim
-        sprite(SMOKE, b.x, b.y, ea, 7.2, 1, 0, 0.86, 0.05, 0.62, 1, 2);        // body: opaque, so
-        sprite(ADD, b.x, b.y, ea, 3.2, 1, 0, 1.0, 0.70, 0.96, 1, 2);           // white sea cannot eat it
+        sprite(SMOKE, b.x, b.y, ea, 22.0, 1, 0, 0.03, 0.00, 0.04, 0.88, 2);   // rim
+        sprite(SMOKE, b.x, b.y, ea, 14.4, 1, 0, 0.86, 0.05, 0.62, 1, 2);       // body: opaque, so
+        sprite(ADD, b.x, b.y, ea, 6.4, 1, 0, 1.0, 0.70, 0.96, 1, 2);           // white sea cannot eat it
       }
       // ---- pickups: 3D medallions
       for (const k of w.pickups) {

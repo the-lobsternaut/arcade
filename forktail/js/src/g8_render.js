@@ -58,7 +58,7 @@
         if (b.kind === 'torp') { base(); ctx.fillStyle = 'rgba(220,240,255,0.8)'; ctx.fillRect(b.x - 0.7, b.y - 4, 1.4, 8); continue; }
         spr(b.kind === 'laser' ? SP.laser : b.kind === 'pellet' ? SP.pellet : SP.pbullet, b.x, b.y, Math.atan2(b.vy, b.vx) + Math.PI / 2);
       }
-      base(); const s = SP.ebullet; if (s) for (const b of eb) ctx.drawImage(s.c, b.x - 4.4, b.y - 4.4, 8.8, 8.8);
+      base(); const s = SP.ebullet; if (s) for (const b of eb) ctx.drawImage(s.c, b.x - 8.8, b.y - 8.8, 17.6, 17.6);
     }
     for (const w of warns) { if (w.friendly) continue; base(); const u = w.t / w.dur; ctx.strokeStyle = `rgba(255,60,40,${0.4 + 0.5 * u})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(w.x, w.y, w.r * (1.4 - 0.4 * u), 0, TAU); ctx.stroke(); }
     for (const q of parts) {
@@ -96,6 +96,10 @@
     plate(x, y, w, h, 2);
     ctx.fillStyle = '#efe6cf'; ctx.strokeStyle = '#efe6cf';
     const cx = x + w / 2, cy = y + h / 2;
+    // the marks below are drawn for the 13-wide plate these used to be; scale the whole face
+    // about its centre instead of respacing every line of them
+    const k = w / 13;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy);
     if (kind === 'pause') {
       if (on) { ctx.beginPath(); ctx.moveTo(cx - 2, cy - 3); ctx.lineTo(cx + 3, cy); ctx.lineTo(cx - 2, cy + 3); ctx.closePath(); ctx.fill(); }
       else { ctx.fillRect(cx - 2.6, cy - 3, 1.8, 6); ctx.fillRect(cx + 0.8, cy - 3, 1.8, 6); }
@@ -113,6 +117,7 @@
       for (const [sx2, sy2] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(cx + sx2 * 3.6, cy + sy2 * 1.4); ctx.lineTo(cx + sx2 * 3.6, cy + sy2 * 3.2); ctx.lineTo(cx + sx2 * 1.6, cy + sy2 * 3.2); }
       ctx.stroke();
     }
+    ctx.restore();
   }
   function drawButtons() {
     hudT();
@@ -136,41 +141,37 @@
     g.addColorStop(0, 'rgba(14,17,20,0.9)'); g.addColorStop(1, 'rgba(26,30,34,0.74)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, HUD_H);
     ctx.fillStyle = 'rgba(217,184,96,0.55)'; ctx.fillRect(0, HUD_H - 0.7, W, 0.7);
-    text('1P', 3, 7.5, 6, BRASS, 'left', 800, false);
-    text(String(score).padStart(7, '0'), 12, 7.8, 8, PAPER, 'left', 700, false, MONO);
-    text('HI', 58, 7.5, 6, BRASS, 'left', 800, false);
-    text(String(Math.max(hiscore, score)).padStart(7, '0'), 67, 7.8, 8, PAPER, 'left', 700, false, MONO);
-    text('MERIT', 113, 7.5, 5.4, BRASS, 'left', 800, false);
-    text(String(run ? run.merit : 0), 133, 7.8, 7.2, '#bfe39a', 'left', 700, false, MONO);
+    // Three rows of eight things was a cockpit, not a readout. What is left is what you can act
+    // on while you are being shot at: how much score you have, how much aeroplane you have, and
+    // what is under your thumb. The hi-score belongs to the title and the game-over screens, and
+    // Merit is spent in the hangar, where it is shown in letters you can read.
+    text(String(score).padStart(7, '0'), 3, 10.5, 13, PAPER, 'left', 700, false, MONO);
     const L = curLevel();
-    text(L ? L.short || L.name : 'STAGE ' + stage, W - 63, 7.5, 5.6, BRASS, 'right', 800, false);
+    text(L ? L.short || L.name : 'STAGE ' + stage, W - 92, 10.5, 7.6, BRASS, 'right', 800, false);
     const p = player; if (!p) return;
-    const ff = p.fuel / ST.fuelMax, af = p.armor / ST.armorMax;
-    const lowF = ff < 0.22 && ((time * 4) | 0) % 2 === 0, lowA = af < 0.2 && ((time * 4) | 0) % 2 === 1;
-    text('FUEL', 3, 18, 5.2, lowF ? '#ff5a4a' : BRASS, 'left', 800, false);
-    bar(19, 15.5, 84, 5, ff, ff > 0.5 ? '#e8c14a' : ff > 0.25 ? '#e89a3a' : '#e2482f', lowF);
-    text(String(Math.ceil(p.fuel)), 106, 18.2, 5.6, PAPER, 'left', 700, false, MONO);
-    text('ARMOR', 124, 18, 5.2, lowA ? '#ff5a4a' : BRASS, 'left', 800, false);
-    bar(146, 15.5, 84, 5, af, af > 0.7 ? '#7fcf5a' : af > 0.45 ? '#c7d24a' : af > 0.2 ? '#e8902a' : '#e2482f', lowA);
-    text(String(Math.ceil(p.armor)), 233, 18.2, 5.6, PAPER, 'left', 700, false, MONO);
+    const af = p.armor / ST.armorMax;
+    const lowA = af < 0.2 && ((time * 4) | 0) % 2 === 1;
+    text('ARMOR', 3, 27.5, 8, lowA ? '#ff5a4a' : BRASS, 'left', 800, false);
+    bar(33, 23, 168, 9, af, af > 0.7 ? '#7fcf5a' : af > 0.45 ? '#c7d24a' : af > 0.2 ? '#e8902a' : '#e2482f', lowA);
+    text(String(Math.ceil(p.armor)), 205, 27.8, 9, PAPER, 'left', 700, false, MONO);
+    // wingmen ride on the armor row now that it is the only bar up here
+    let wx = 226;
+    for (const w of wing) { text('W' + (w.slot + 1), wx, 27.8, 6.6, w.dead ? '#7a4a44' : '#9fd8ff', 'left', 800, false); if (!w.dead) bar(wx + 11, 24.2, 9, 6, w.armor / w.max, '#7fbcd8'); wx += 23; }
     // weapon modes
     const gm = p.mode === 'guns', gn = GUNS[run.gun.type], bm = BOMBS[run.bomb.type];
-    const y = 25.5;
-    ctx.fillStyle = gm ? 'rgba(255,224,102,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(2, y - 2.6, 64, 8.2);
-    ctx.fillStyle = !gm ? 'rgba(255,176,74,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(68, y - 2.6, 72, 8.2);
-    if (gm) { ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 0.6; ctx.strokeRect(2, y - 2.6, 64, 8.2); } else { ctx.strokeStyle = '#ffb04a'; ctx.lineWidth = 0.6; ctx.strokeRect(68, y - 2.6, 72, 8.2); }
-    text('GUNS', 4.5, y + 1.5, 5.4, gm ? '#ffe066' : '#8b8778', 'left', 800, false);
-    text(gn.name + ' ' + 'I'.repeat(run.gun.lvl), 23, y + 1.5, 5.4, gm ? gn.col : '#8b8778', 'left', 800, false);
-    text('BOMBS', 70.5, y + 1.5, 5.4, !gm ? '#ffb04a' : '#8b8778', 'left', 800, false);
+    const y = 39.5, ch = 12;
+    ctx.fillStyle = gm ? 'rgba(255,224,102,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(2, y - ch / 2, 120, ch);
+    ctx.fillStyle = !gm ? 'rgba(255,176,74,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(126, y - ch / 2, 142, ch);
+    ctx.strokeStyle = gm ? '#ffe066' : '#ffb04a'; ctx.lineWidth = 0.7;
+    if (gm) ctx.strokeRect(2, y - ch / 2, 120, ch); else ctx.strokeRect(126, y - ch / 2, 142, ch);
+    text('GUNS', 5, y + 0.4, 7.4, gm ? '#ffe066' : '#8b8778', 'left', 800, false);
+    text(gn.name + ' ' + 'I'.repeat(run.gun.lvl), 33, y + 0.4, 7.4, gm ? gn.col : '#8b8778', 'left', 800, false);
+    text('BOMBS', 129, y + 0.4, 7.4, !gm ? '#ffb04a' : '#8b8778', 'left', 800, false);
     const bcd = bombCooldown(run.bomb.type, run.bomb.lvl);
-    // A 30-second reload is too long to read off a 72-pixel bar, so a long one counts itself down.
+    // A 30-second reload is too long to read off a bar, so a long one counts itself down.
     const bwait = p.bombCd > 0 && bcd > 4;
-    text(bwait ? bm.name + ' ' + Math.ceil(p.bombCd) + 's' : bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 93, y + 1.5, 5.4, bwait ? '#8b8778' : !gm ? bm.col : '#8b8778', 'left', 800, false);
-    if (p.bombCd > 0) { ctx.fillStyle = gm ? 'rgba(255,176,74,0.35)' : 'rgba(255,176,74,0.7)'; ctx.fillRect(68, y + 5, 72 * (1 - clamp(p.bombCd / bcd, 0, 1)), 0.8); }
-    // wingmen armor
-    let wx = 146;
-    for (const w of wing) { text('W' + (w.slot + 1), wx, y + 1.5, 5, w.dead ? '#7a4a44' : '#9fd8ff', 'left', 800, false); if (!w.dead) bar(wx + 9, y - 0.2, 22, 3.6, w.armor / w.max, '#7fbcd8'); else text('DOWN', wx + 9, y + 1.5, 4.6, '#c85a4a', 'left', 800, false); wx += 36; }
-    text(p.loopT > 0 ? 'LOOP!' : p.loopCd > 0 ? 'LOOP..' : 'LOOP', W - 3, y + 1.5, 5.2, p.loopT > 0 ? '#9fd8ff' : (p.fuel > ST.loopCost + 1 && p.loopCd <= 0 ? '#c9c2ad' : '#5c5c5c'), 'right', 800, false);
+    text(bwait ? bm.name + ' ' + Math.ceil(p.bombCd) + 's' : bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 166, y + 0.4, 7.4, bwait ? '#8b8778' : !gm ? bm.col : '#8b8778', 'left', 800, false);
+    if (p.bombCd > 0) { ctx.fillStyle = gm ? 'rgba(255,176,74,0.35)' : 'rgba(255,176,74,0.7)'; ctx.fillRect(126, y + ch / 2 - 1.2, 142 * (1 - clamp(p.bombCd / bcd, 0, 1)), 1.2); }
     if (boss && !boss.dead && phase === 'boss') {
       const w2 = W - 80, f = boss.hp / boss.maxhp;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(39, HUD_H + 3, w2 + 2, 5);
@@ -179,9 +180,17 @@
       text('P' + boss.bphase, 36, HUD_H + 5.6, 5.2, '#ff9c8a', 'right', 800, true);
     }
   }
-  function roundBtn(x, y, r, ok, label, glyph) {
+  // `fill` is a 0..1 level that floods the face with brass from the bottom up - a reload you can
+  // watch rather than a number you have to read.
+  function roundBtn(x, y, r, ok, label, glyph, fill) {
     ctx.globalAlpha = ok ? 0.85 : 0.4;
     ctx.fillStyle = 'rgba(20,24,28,0.55)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    if (fill > 0) {
+      ctx.save(); ctx.clip();
+      ctx.fillStyle = 'rgba(217,184,96,' + (0.22 + 0.5 * fill).toFixed(3) + ')';
+      ctx.fillRect(x - r, y + r - 2 * r * fill, r * 2, 2 * r * fill);
+      ctx.restore();
+    }
     ctx.strokeStyle = 'rgba(217,184,96,0.85)'; ctx.lineWidth = r / 13; ctx.stroke();
     // The glyphs are drawn for a 13-unit button, so scale the whole face about its centre rather
     // than rewriting every arc and rectangle in it - resize the button and the mark follows.
@@ -197,25 +206,27 @@
     hudT();
     const p = player;
     let [x, y, r] = loopBtn();
-    roundBtn(x, y, r, p && !p.dead && p.loopT <= 0 && p.loopCd <= 0 && p.fuel > ST.loopCost + 1, 'LOOP', () => {
+    roundBtn(x, y, r, p && !p.dead && p.loopT <= 0 && p.loopCd <= 0, 'LOOP', () => {
       ctx.strokeStyle = PAPER; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y - 2, 4.8, -Math.PI * 0.15, Math.PI * 1.45); ctx.stroke();
       const a = Math.PI * 1.45, ax = x + Math.cos(a) * 4.8, ay = y - 2 + Math.sin(a) * 4.8;
       ctx.fillStyle = PAPER; ctx.beginPath(); ctx.moveTo(ax + 2.4, ay - 0.6); ctx.lineTo(ax - 0.4, ay - 2.4); ctx.lineTo(ax - 0.6, ay + 1.5); ctx.closePath(); ctx.fill();
     });
     [x, y, r] = modeBtn();
     const gm = p && p.mode === 'guns';
-    roundBtn(x, y, r, true, gm ? 'GUNS' : 'BOMBS', () => {
+    const bcd = p ? bombCooldown(run.bomb.type, run.bomb.lvl) : 1;
+    const reloading = p && !gm && p.bombCd > 0;
+    roundBtn(x, y, r, true, reloading ? 'RELOAD' : gm ? 'GUNS' : 'BOMBS', () => {
       ctx.fillStyle = gm ? '#ffe066' : '#ffb04a';
       if (gm) { for (const dx of [-2.4, 0, 2.4]) ctx.fillRect(x + dx - 0.6, y - 6, 1.2, 6); }
       else { ctx.beginPath(); ctx.ellipse(x, y - 2.5, 2.4, 4, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - 2.6, y + 0.6, 5.2, 1); }
-    });
+    }, reloading ? 1 - clamp(p.bombCd / bcd, 0, 1) : 0);
   }
   function dim(a) { hudT(); ctx.fillStyle = `rgba(4,8,14,${a})`; ctx.fillRect(0, 0, W, H); }
   function blink(rate) { return ((time * (rate || 2.2)) | 0) % 2 === 0; }
   function menuBtn(r, label, hot) {
     const [x, y, w, h] = r; plate(x, y, w, h, 3);
     if (hot) { ctx.strokeStyle = 'rgba(245,215,122,0.9)'; ctx.lineWidth = 0.9; ctx.stroke(); }
-    text(label, x + w / 2, y + h / 2 + 0.4, 8, hot ? '#f5d77a' : PAPER, 'center', 800, false);
+    text(label, x + w / 2, y + h / 2 + 0.4, Math.min(10.5, h * 0.52), hot ? '#f5d77a' : PAPER, 'center', 800, false);
   }
 
   // USAAF national insignia (the "star and bar", adopted 28 June 1943): white star on an
@@ -297,66 +308,68 @@
     ctx.restore();
   }
 
+  // The wordmark is a painted asset now. It is still drawn through the game's own units so it
+  // lands in the same place at every size, and the typeset version stays as the fallback for the
+  // moment before the art has loaded - or if it never does.
+  function wordmark(top) {
+    const lg = SP && SP.logo;
+    if (lg && lg.c) {
+      const w = Math.min(W - 16, 252), h = w * (lg.h / lg.w);
+      ctx.drawImage(lg.c, W / 2 - w / 2, top, w, h);
+      return top + h;
+    }
+    devilMark(W / 2, top + 10, 20);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let tsz = 60; const TW = 'FORK-TAILED', tmax = W - 36;
+    do { ctx.font = 'italic 900 ' + tsz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; tsz -= 1; }
+    while (tsz > 12 && ctx.measureText(TW).width > tmax);
+    const cy = top + 50;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#1a1206'; ctx.lineJoin = 'round'; ctx.strokeText(TW, W / 2, cy);
+    ctx.fillStyle = '#d9b860'; ctx.fillText(TW, W / 2, cy);
+    ctx.restore();
+    text('D E V I L', W / 2, cy + 20, 12, PAPER, 'center', 800, false);
+    return cy + 30;
+  }
   function drawTitle() {
     hudT();
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, 'rgba(3,8,16,0.78)'); g.addColorStop(0.45, 'rgba(3,8,16,0.15)'); g.addColorStop(1, 'rgba(3,8,16,0.78)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const cy = Math.max(66, H * 0.17);
-    ctx.save();
-    // wordmark is auto-fitted so a long name never runs off the 270-wide playfield
-    devilMark(W / 2, cy - 42, 23);
-    const TW = 'FORK-TAILED', tmax = W - 36;
-    let tsz = 60;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    do { ctx.font = 'italic 900 ' + tsz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; tsz -= 1; }
-    while (tsz > 12 && ctx.measureText(TW).width > tmax);
-    const lg = ctx.createLinearGradient(0, cy - 32, 0, cy + 32);
-    lg.addColorStop(0, '#fff3cf'); lg.addColorStop(0.35, '#e6c36e'); lg.addColorStop(0.5, '#a9772e'); lg.addColorStop(0.62, '#e0b85e'); lg.addColorStop(1, '#6e4a17');
-    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
-    ctx.lineWidth = 5; ctx.strokeStyle = '#1a1206'; ctx.lineJoin = 'round'; ctx.strokeText(TW, W / 2, cy);
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = lg; ctx.fillText(TW, W / 2, cy);
-    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(255,244,210,0.8)'; ctx.strokeText(TW, W / 2, cy);
-    ctx.restore();
-    hudT();
-    const bg = ctx.createLinearGradient(0, cy + 32, 0, cy + 50); bg.addColorStop(0, '#5a6233'); bg.addColorStop(1, '#343a1c');
-    ctx.fillStyle = bg; ctx.fillRect(30, cy + 33, W - 60, 17);
-    ctx.fillStyle = 'rgba(217,184,96,0.85)'; ctx.fillRect(30, cy + 33, W - 60, 0.7); ctx.fillRect(30, cy + 49.3, W - 60, 0.7);
-    text('D E V I L', W / 2, cy + 41.8, 11, PAPER, 'center', 800, true);
-    text('P-38 LIGHTNING  -  1941-1945 CAMPAIGN', W / 2, cy + 60, 6, '#cfd6e0', 'center', 700, true);
+    const cy = wordmark(Math.max(40, H * 0.1));
+    text('P-38 LIGHTNING  -  1941-1945 CAMPAIGN', W / 2, cy + 9, 7, '#cfd6e0', 'center', 700, true);
     { // flight model + test mode, made obvious: these were too small to find before
-      const bw = 150, bx = W / 2 - bw / 2, by0 = cy + 70, bh = 20;
+      const bw = 184, bx = W / 2 - bw / 2, by0 = cy + 26, bh = 26;
       TITLE_BTN.mode = [bx, by0, bw, bh];
       modeSwitch(bx, by0, bw, bh);
-      text('VIEW - TAP TO SWITCH', W / 2, by0 - 5, 5, '#8d94a2', 'center', 700, true);
-      text(mode3d ? 'CHASE CAMERA - SAME CONTROLS' : 'CLASSIC TOP-DOWN', W / 2, by0 + bh + 7, 5, '#cfd6e0', 'center', 700, true);
+      text('VIEW - TAP TO SWITCH', W / 2, by0 - 6, 6, '#8d94a2', 'center', 700, true);
+      text(mode3d ? 'CHASE CAMERA - SAME CONTROLS' : 'CLASSIC TOP-DOWN', W / 2, by0 + bh + 9, 6, '#cfd6e0', 'center', 700, true);
       // test mode
-      const tw = 150, tx = W / 2 - tw / 2, ty = by0 + bh + 14;
-      TITLE_BTN.test = [tx, ty, tw, 13];
+      const tw = 184, tx = W / 2 - tw / 2, ty0 = by0 + bh + 18, th = 18;
+      TITLE_BTN.test = [tx, ty0, tw, th];
       const on = G.testUnlock && G.testUnlock();
       ctx.fillStyle = on ? 'rgba(120,200,120,0.22)' : 'rgba(8,12,18,0.6)';
-      ctx.fillRect(tx, ty, tw, 13);
-      ctx.strokeStyle = on ? 'rgba(140,220,140,0.7)' : 'rgba(150,150,170,0.4)'; ctx.lineWidth = 0.6; ctx.strokeRect(tx, ty, tw, 13);
-      text(on ? 'TEST MODE ON - ALL TECH UNLOCKED' : 'TEST MODE OFF - NORMAL PROGRESSION', W / 2, ty + 7, 5.2, on ? '#aef0ae' : '#9aa0b0', 'center', 800, true);
+      ctx.fillRect(tx, ty0, tw, th);
+      ctx.strokeStyle = on ? 'rgba(140,220,140,0.7)' : 'rgba(150,150,170,0.4)'; ctx.lineWidth = 0.7; ctx.strokeRect(tx, ty0, tw, th);
+      text(on ? 'TEST MODE ON - ALL TECH UNLOCKED' : 'TEST MODE OFF - NORMAL PROGRESSION', W / 2, ty0 + th / 2 + 0.4, 6.4, on ? '#aef0ae' : '#9aa0b0', 'center', 800, true);
     }
-    const by = Math.max(cy + 150, H * 0.5);
+    const by = Math.max(cy + 118, H * 0.5);
     const save = G.hasSave();
-    TITLE_BTN.cont = save ? [W / 2 - 60, by, 120, 17] : null;
-    TITLE_BTN.neu = [W / 2 - 60, by + (save ? 21 : 0), 120, 17];
-    TITLE_BTN.dossier = [W / 2 - 60, by + (save ? 42 : 21), 58, 14];
-    TITLE_BTN.save = [W / 2 + 2, by + (save ? 42 : 21), 58, 14];
+    TITLE_BTN.cont = save ? [W / 2 - 88, by, 176, 26] : null;
+    TITLE_BTN.neu = [W / 2 - 88, by + (save ? 31 : 0), 176, 26];
+    TITLE_BTN.dossier = [W / 2 - 88, by + (save ? 62 : 31), 86, 22];
+    TITLE_BTN.save = [W / 2 + 2, by + (save ? 62 : 31), 86, 22];
     if (save) menuBtn(TITLE_BTN.cont, 'CONTINUE  -  HANGAR', blink(1.6));
     menuBtn(TITLE_BTN.neu, 'NEW CAMPAIGN', !save && blink(1.6));
     menuBtn(TITLE_BTN.dossier, 'DOSSIER', false); menuBtn(TITLE_BTN.save, 'SAVE / LOAD', false);
-    const ty = by + (save ? 66 : 45);
-    text('HI-SCORE  ' + String(hiscore).padStart(7, '0'), W / 2, ty, 7, PAPER, 'center', 700, true);
+    const ty = by + (save ? 96 : 65);
+    text('HI-SCORE  ' + String(hiscore).padStart(7, '0'), W / 2, ty, 8.5, PAPER, 'center', 700, true);
     const lines = G.touchMode
-      ? ['DRAG TO FLY - FIRE IS AUTOMATIC WHILE TOUCHING', 'MODE BUTTON: GUNS <-> BOMBS   LOOP: EVADE', 'ARM IN THE HANGAR  -  WATCH FUEL AND ARMOR']
-      : ['ARROWS/WASD MOVE   SPACE/Z FIRE   Q/TAB GUNS<->BOMBS', 'X/SHIFT LOOP   P PAUSE   M SOUND   B MUSIC   F FULLSCREEN', 'ARM IN THE HANGAR  -  WATCH FUEL AND ARMOR'];
-    const ly = Math.min(H - 36, ty + 22);
-    lines.forEach((l, i) => text(l, W / 2, ly + i * 9, 5.4, i === 2 ? '#f3b49a' : '#d8dde6', 'center', 700, true));
-    text('ORIGINAL FAN TRIBUTE - NOT AFFILIATED WITH CAPCOM', W / 2, H - 8, 4.6, 'rgba(210,214,224,0.6)', 'center', 600, false);
+      ? ['DRAG TO FLY - FIRE IS AUTOMATIC WHILE TOUCHING', 'MODE BUTTON: GUNS <-> BOMBS   LOOP: EVADE', 'ARM IN THE HANGAR  -  WATCH YOUR ARMOR']
+      : ['ARROWS/WASD MOVE   SPACE/Z FIRE   Q/TAB GUNS<->BOMBS', 'X/SHIFT LOOP   P PAUSE   M SOUND   B MUSIC   F FULLSCREEN', 'ARM IN THE HANGAR  -  WATCH YOUR ARMOR'];
+    const ly = Math.min(H - 40, ty + 26);
+    lines.forEach((l, i) => text(l, W / 2, ly + i * 10.5, 6.2, i === 2 ? '#f3b49a' : '#d8dde6', 'center', 700, true));
+    text('ORIGINAL FAN TRIBUTE - NOT AFFILIATED WITH CAPCOM', W / 2, H - 8, 5, 'rgba(210,214,224,0.6)', 'center', 600, false);
   }
   function drawLoading() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -364,15 +377,12 @@
     const g = ctx.createLinearGradient(0, 0, 0, c.height); g.addColorStop(0, '#07131f'); g.addColorStop(1, '#0b2f52');
     ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
     hudT();
-    devilMark(W / 2, H * 0.4 - 38, 20, '#e6c36e', 0.9);
-    ctx.font = 'italic 900 30px "Arial Black", Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#d9b860'; ctx.fillText('FORK-TAILED', W / 2, H * 0.4);
-    text('D E V I L', W / 2, H * 0.4 + 24, 12, PAPER, 'center', 800, false);
-    const bw = 160, bx = (W - bw) / 2, by = H * 0.4 + 52;
-    ctx.fillStyle = '#05080c'; ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
-    ctx.strokeStyle = 'rgba(217,184,96,0.7)'; ctx.lineWidth = 0.6; ctx.strokeRect(bx - 1, by - 1, bw + 2, 7);
-    ctx.fillStyle = '#d9b860'; ctx.fillRect(bx, by, bw * loadP, 5);
-    text('LOADING ' + Math.round(loadP * 100) + '%', W / 2, by + 15, 6.5, '#c9c2ad', 'center', 700, false);
+    const under = wordmark(H * 0.3);
+    const bw = 190, bx = (W - bw) / 2, by = under + 18;
+    ctx.fillStyle = '#05080c'; ctx.fillRect(bx - 1.2, by - 1.2, bw + 2.4, 9.4);
+    ctx.strokeStyle = 'rgba(217,184,96,0.7)'; ctx.lineWidth = 0.7; ctx.strokeRect(bx - 1.2, by - 1.2, bw + 2.4, 9.4);
+    ctx.fillStyle = '#d9b860'; ctx.fillRect(bx, by, bw * loadP, 7);
+    text('LOADING ' + Math.round(loadP * 100) + '%', W / 2, by + 20, 8, '#c9c2ad', 'center', 700, false);
   }
   function drawBanners() {
     hudT();
@@ -389,11 +399,10 @@
       text(L && L.bossName ? L.bossName.toUpperCase() + ' APPROACHING' : bt === 'bossBomber' ? 'HEAVY BOMBER APPROACHING' : bt === 'carrier' ? 'ENEMY CARRIER APPROACHING' : 'ENEMY BATTLESHIP APPROACHING', W / 2, H * 0.36 + 32, 7, '#ffd8d0', 'center', 700);
     } else if (phase === 'clear' && phaseT > 1.4) {
       text('MISSION COMPLETE', W / 2, H * 0.36, 16, '#f5d77a', 'center', 800);
-      text('FUEL+ARMOR BONUS  ' + clearBonus, W / 2, H * 0.36 + 20, 8, PAPER, 'center', 700);
-      text('MERIT  ' + (run ? run.merit : 0) + '  -  TO THE HANGAR', W / 2, H * 0.36 + 33, 7, '#9fe07a', 'center', 700);
+      text('ARMOR BONUS  ' + clearBonus, W / 2, H * 0.36 + 20, 9, PAPER, 'center', 700);
+      text('MERIT  ' + (run ? run.merit : 0) + '  -  TO THE HANGAR', W / 2, H * 0.36 + 34, 8, '#9fe07a', 'center', 700);
     }
-    if (p && !p.dead && p.fuel < ST.fuelMax * 0.2 && blink(3)) text(p.stall > 0 ? 'ENGINE STALL - FIND FUEL!' : 'LOW FUEL!', W / 2, H - 46, 8.5, '#ff5a4a', 'center', 800);
-    else if (p && !p.dead && p.armor < ST.armorMax * 0.2 && blink(3)) text('HEAVY DAMAGE!', W / 2, H - 46, 8.5, '#ff7a4a', 'center', 800);
+    if (p && !p.dead && p.armor < ST.armorMax * 0.2 && blink(3)) text('HEAVY DAMAGE!', W / 2, H - 52, 11, '#ff7a4a', 'center', 800);
   }
   function drawPopups() {
     hudT();

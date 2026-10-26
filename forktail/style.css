@@ -63,38 +63,39 @@ html, body {
    over half as tall, so the card is an L and the corner under the text stays open onto the game.
    It used to be three shapes in four places and the enemy's briefing sat against the bottom edge,
    under your thumb. JS sets the card's box and its two children's sizes; this is the chrome. */
-.tcard { position: absolute; display: flex; align-items: flex-start; gap: 6px; padding: 0;
-  background: none; border: none; box-shadow: none; overflow: visible; pointer-events: none;
-  transform: translateY(0);
-  transition: transform 0.34s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.2s; }
-.tcard.hidden { transform: translateY(-104%); opacity: 0; }
-.tslot { flex: none; align-self: stretch; border-radius: 0 6px 6px 0; overflow: hidden;
+.tcard { position: absolute; padding: 0;
+  background: none; border: none; box-shadow: none; overflow: visible; pointer-events: auto; cursor: pointer;
+  transform: translateX(0);
+  transition: transform 0.34s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.22s; }
+/* in and out the same way: off the left edge, portrait first, the way a call arrives and leaves */
+.tcard.hidden { transform: translateX(calc(-100% - 16px)); opacity: 0; }
+.tslot { position: absolute; left: 0; top: 0; bottom: 0; z-index: 2; border-radius: 0 6px 6px 0; overflow: hidden;
   background: radial-gradient(ellipse at 50% 35%, #3e4a58, #12161c);
   border: 1px solid rgba(214,180,100,0.5); border-left: none;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.5); }
-.ttext { flex: 1 1 auto; min-width: 0; position: relative; overflow: hidden;
-  display: flex; flex-direction: column; padding: 5px 8px 6px 6px;
-  border-radius: 6px 0 0 6px; border: 1px solid rgba(120,200,255,0.5); border-right-width: 0;
-  background: linear-gradient(180deg, rgba(14,22,34,0.93), rgba(10,16,26,0.88));
-  box-shadow: 0 3px 12px rgba(0,0,0,0.45); }
+  /* the portrait sits over the panel, so its shadow falls across it */
+  box-shadow: 10px 0 22px rgba(0,0,0,0.7), 0 3px 12px rgba(0,0,0,0.5); }
+.ttext { position: absolute; right: 0; z-index: 1; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; padding: 6px 10px 7px 6px;
+  border-radius: 0 6px 6px 0; border: 1px solid rgba(120,200,255,0.5); border-left-width: 0;
+  background: linear-gradient(180deg, rgba(14,22,34,0.95), rgba(10,16,26,0.9));
+  box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+  transform: translateX(var(--tuck, -100%));
+  transition: transform 0.4s cubic-bezier(0.18, 0.86, 0.3, 1); }
+/* out from behind the face, a beat after the card itself has arrived */
+.tcard.show .ttext { transform: translateX(0); transition-delay: 0.1s; }
 /* direct children only - a name line carries a flag, which is a span of its own */
-.ttext > b { display: flex; align-items: center; flex: none; font-size: 11px; color: #9fd8ff; letter-spacing: 0.05em; }
-.ttext > small { display: block; flex: none; font-size: 10px; color: #a9a28c; }
-.ttext > span { display: block; flex: 1; min-height: 0; overflow: auto; margin-top: 2px; font-size: 12px; line-height: 1.24; }
-.tcard.radio .ttext { padding-right: 36px; }
-.tcard.inset .ttext { border-right-width: 1px; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.ttext > b { display: flex; align-items: center; flex: none; font-size: 14px; color: #9fd8ff; letter-spacing: 0.05em; }
+.ttext > small { display: block; flex: none; font-size: 12px; color: #a9a28c; }
+.ttext > span { display: block; flex: 1; min-height: 0; overflow: auto; margin-top: 3px; font-size: 15px; line-height: 1.26; }
+.tcard:not(.inset) .ttext { border-right-width: 0; border-radius: 0; }
 .tcard.ally:not(.ctrl) .ttext > b { color: #f5d77a; }
-.tcard.axis .ttext { border-color: rgba(220,90,70,0.8);
+.tcard.axis .ttext { border-color: rgba(220,90,70,0.8); border-left-width: 0;
   background: linear-gradient(180deg, rgba(62,32,30,0.95), rgba(22,13,12,0.92)); }
 .tcard.axis .ttext > b { color: #ff9c86; }
 .tcard.axis .tslot { border-color: rgba(220,90,70,0.6); }
 /* the briefing's line types itself in, and the bar under it is how long you have before the next */
 .btimer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(217,184,96,0.8); transform-origin: left; transform: scaleX(1); transition: transform linear; }
 .btimer.run { transform: scaleX(0); }
-.tx { position: absolute; right: 4px; top: 4px; z-index: 2; pointer-events: auto; cursor: pointer;
-  width: 26px; height: 26px; line-height: 22px; text-align: center; font-size: 17px; padding: 0;
-  color: #d8e4f0; background: rgba(10,16,24,0.72); border: 1px solid rgba(160,200,235,0.5); border-radius: 50%; }
-.tx:active { background: rgba(60,90,120,0.9); }
 .syncchip { position: absolute; right: max(8px, var(--sar)); top: max(8px, var(--sat)); padding: 4px 9px; font-size: 12px; border-radius: 12px; background: rgba(20,24,28,0.9); border: 1px solid rgba(214,180,100,0.6); transition: opacity 0.4s; }
 .syncchip.server { color: #9fe07a; } .syncchip.local { color: #ffcf7a; }
 .syncchip.hidden { opacity: 0; }
@@ -108,12 +109,12 @@ html, body {
 .pmerit { font-size: 13px; color: #c9c2ad; } .pmerit b { color: #bfe39a; font-size: 17px; }
 .psync { margin-left: auto; font-size: 11px; } .psync.on { color: #9fe07a; } .psync.off { color: #ffcf7a; }
 .pbody { flex: 1; display: flex; gap: 10px; min-height: 0; padding-top: 8px; }
-.btn { pointer-events: auto; background: linear-gradient(180deg, #4a5058, #262a30); color: #f1ead6; border: 1px solid rgba(214,180,100,0.7); border-radius: 5px; padding: 8px 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; }
+.btn { pointer-events: auto; background: linear-gradient(180deg, #4a5058, #262a30); color: #f1ead6; border: 1px solid rgba(214,180,100,0.7); border-radius: 6px; padding: 12px 16px; font-size: 16px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; min-height: 44px; }
 .btn:active { transform: translateY(1px); }
 .btn.go { background: linear-gradient(180deg, #b8873a, #5e4212); color: #fff6e2; text-shadow: 0 1px 2px rgba(0,0,0,0.7); border-color: rgba(240,210,140,0.85); }
 .btn.ghost { background: rgba(255,255,255,0.04); }
 .btn.dis { opacity: 0.5; }
-.btn.tab { border-radius: 5px 5px 0 0; border-bottom: none; flex: 1; padding: 7px 4px; }
+.btn.tab { border-radius: 6px 6px 0 0; border-bottom: none; flex: 1; padding: 11px 4px; font-size: 14px; }
 .btn.tab.on { background: linear-gradient(180deg, #b8873a, #5e4212); color: #fff6e2; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
 .hbar { display: flex; gap: 6px; justify-content: flex-end; padding-top: 6px; flex: none; flex-wrap: wrap; }
 .hbar .go { flex: 1; max-width: 220px; }
@@ -168,7 +169,7 @@ html, body {
 .mdetail { padding: 8px; } .mdetail h3 { margin: 0; color: #f5d77a; font-size: 17px; } .mdetail small { color: #c9c2ad; font-size: 11.5px; }
 .mdetail p { margin: 5px 0; font-size: 13px; line-height: 1.3; } .mmeta { font-size: 11.5px !important; color: #c9c2ad; } .mmeta b { color: #ff9c86; }
 .mfoot { flex: none; padding-top: 8px; display: flex; gap: 6px; }
-.mfoot .btn { flex: 1; width: 100%; padding: 13px 12px; font-size: 15px; letter-spacing: 0.14em; }
+.mfoot .btn { flex: 1; width: 100%; padding: 16px 12px; font-size: 17px; letter-spacing: 0.14em; }
 /* the step arrows keep their own width - the mission button takes the rest */
 .mfoot .arrow { flex: none; width: 56px; padding: 13px 0; display: flex; align-items: center; justify-content: center; }
 .mfoot .arrow i { display: block; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
@@ -176,8 +177,8 @@ html, body {
 .mfoot .arrow.next i { border-left: 12px solid currentColor; }
 .ptopbtn { margin-left: auto; padding: 5px 14px; font-size: 12px; }
 .mlist { flex: 1; overflow-y: auto; min-height: 60px; }
-.mitem { padding: 5px 7px; border-left: 3px solid #6a6e74; margin-bottom: 3px; cursor: pointer; background: rgba(255,255,255,0.04); position: relative; }
-.mitem b { display: block; font-size: 12.5px; } .mitem small { font-size: 10.5px; color: #a9a28c; }
+.mitem { padding: 9px 9px; border-left: 3px solid #6a6e74; margin-bottom: 3px; cursor: pointer; background: rgba(255,255,255,0.04); position: relative; }
+.mitem b { display: block; font-size: 14px; } .mitem small { font-size: 12px; color: #a9a28c; }
 .mitem.done { border-color: #9fe07a; } .mitem.avail { border-color: #f5d77a; } .mitem.fog { opacity: 0.55; } .mitem.sel { background: rgba(217,184,96,0.18); }
 .medal { position: absolute; right: 6px; top: 7px; width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 .mrec .medal { position: static; vertical-align: -2px; }
@@ -212,7 +213,7 @@ html, body {
   .tree { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-height: 430px) {
-  .ttext > span { font-size: 11px; line-height: 1.18; }
+  .ttext > span { font-size: 13px; line-height: 1.2; }
 }
 
 .flag.usflag{background:linear-gradient(#34508f,#34508f) left top/44% 56% no-repeat,repeating-linear-gradient(180deg,#c83a3a 0 14.3%,#ece6da 14.3% 28.6%)}
@@ -235,7 +236,7 @@ html, body {
 .vmed.bronze { background: linear-gradient(180deg, #e8b98a, #8a5a2e); }
 .vbonus { margin: 0; text-align: center; color: #b9c0ce; font-size: 13px; line-height: 1.4; }
 .vbar { display: flex; gap: 8px; justify-content: center; padding-top: 4px; }
-.vbar .btn { min-width: 160px; }
+.vbar .btn { min-width: 180px; }
 
 /* armament picker */
 .node.arm { cursor: pointer; }

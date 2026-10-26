@@ -159,14 +159,9 @@
     A.music('boss' + (((stage - 1) % 2) + 1));
   }
   function dropPow(x, y, fam) {
-    if (!fam) {
-      // weapon power-ups are gone: armament is chosen in the hangar. Only fuel and repair drop.
-      const p = player, fuelNeed = p ? 1 - p.fuel / ST.fuelMax : 0, armNeed = p ? 1 - p.armor / ST.armorMax : 0;
-      const wg = { fuel: 0.5 + fuelNeed * 0.6, repair: 0.5 + armNeed * 0.6 };
-      let tot = 0; for (const k in wg) tot += wg[k];
-      let r = Math.random() * tot; fam = 'fuel';
-      for (const k in wg) { r -= wg[k]; if (r <= 0) { fam = k; break; } }
-    }
+    // weapon power-ups are gone: armament is chosen in the hangar, and so is everything else you
+    // carry. Armor is the only thing a mission can hand you now, so REPAIR is the only drop.
+    if (!fam) fam = 'repair';
     pickups.push({ id: gid++, fam, x: clamp(x, 14, W - 14), y: Math.max(y, HUD_H + 14), vy: -24, t: 0, ti: 0, cd: 0 });
     powSpawned++; POWTRACK.drops++; POWTRACK.since = 0;
   }

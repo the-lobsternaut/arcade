@@ -231,16 +231,16 @@
   };
   G.togglePause = () => G.setPaused(!paused);
   G.toggleMute = () => A.toggleMute();
-  const BTN = { pause: [W - 30, 2, 13, 11], mute: [W - 15, 2, 13, 11], music: [W - 45, 2, 13, 11], fs: [W - 60, 2, 13, 11] };
+  const BTN = { pause: [W - 44, 2, 20, 17], mute: [W - 22, 2, 20, 17], music: [W - 66, 2, 20, 17], fs: [W - 88, 2, 20, 17] };
   const TITLE_BTN = { cont: null, neu: null, dossier: null, save: null };
   const PAUSE_BTN = { mode: null, abort: null };   // the same 2D/3D switch, reachable mid-mission
   G.abortArmed = () => abortArmUntil > Date.now();
   function inRect(x, y, r, pad) { return r && x >= r[0] - pad && x <= r[0] + r[2] + pad && y >= r[1] - pad && y <= r[1] + r[3] + pad; }
   // Both thumb buttons sit together under the middle of the field rather than tucked into the
   // right corner, and they are big enough to hit without looking down at them.
-  const BTN_R = 19;
-  function loopBtn() { return [W / 2 + 24, H - 30, BTN_R]; }
-  function modeBtn() { return [W / 2 - 24, H - 30, BTN_R]; }
+  const BTN_R = 25;
+  function loopBtn() { return [W / 2 + 33, H - 36, BTN_R]; }
+  function modeBtn() { return [W / 2 - 33, H - 36, BTN_R]; }
   G.handleTap = function (x, y) {
     if (inRect(x, y, BTN.mute, 3)) { A.toggleMute(); return true; }
     if (inRect(x, y, BTN.music, 3)) { A.toggleMusic(); return true; }

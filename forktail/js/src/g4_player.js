@@ -109,9 +109,8 @@
     p.dmg = ds;
     let wob = 0;
     if (ds >= 3 && !ST.fireSuppress) wob = Math.sin(time * 7.3) * 9 * dt + Math.sin(time * 3.1) * 5 * dt;
-    if (p.stall > 0) wob += Math.sin(time * 11) * 14 * dt;
-    const sp = ST.speed * (p.stall > 0 ? 0.6 : 1);
-    p.x += inp.ax * sp * dt + inp.dx + wob; p.y += inp.ay * sp * dt + inp.dy + (p.stall > 0 ? 8 * dt : 0); inp.dx = inp.dy = 0;
+    const sp = ST.speed;
+    p.x += inp.ax * sp * dt + inp.dx + wob; p.y += inp.ay * sp * dt + inp.dy; inp.dx = inp.dy = 0;
     p.x = clamp(p.x, 12, W - 12); p.y = clamp(p.y, HUD_H + 18, H - 16);
     const mv = (p.x - ox) / Math.max(dt, 1e-3);
     p.bank += (clamp(mv / 140, -1, 1) - p.bank) * Math.min(1, dt * 9);
@@ -123,29 +122,31 @@
     if (p.loopT > 0) { p.loopT -= dt; if (p.loopT <= 0) { p.loopT = 0; p.inv = Math.max(p.inv, 0.25); p.loopCd = ST.loopCd; } }
     if (inp.loop) {
       inp.loop = false;
-      if (p.loopT <= 0 && p.loopCd <= 0) {
-        if (p.fuel > ST.loopCost + 1) { p.loopT = LOOP_TIME; p.fuel -= ST.loopCost; A.sfx('loop'); popup(p.x, p.y + 20, 'LOOP', '#9fd8ff', 6); }
-        else A.sfx('denied');
+      // the loop is free; the only thing between you and the next one is the recovery
+      if (p.loopT <= 0 && p.loopCd <= 0) { p.loopT = LOOP_TIME; A.sfx('loop'); popup(p.x, p.y + 20, 'LOOP', '#9fd8ff', 8); }
+    }
+    // The mode button does the obvious thing with the bomb still reloading: it reloads it. Tapping
+    // a dead bomb and being handed the machine guns instead was the wrong answer to the only
+    // question you are asking at that moment. Once the rack is full the button goes back to being
+    // the weapon switch.
+    if (inp.mode) {
+      inp.mode = false;
+      if (p.mode === 'bombs' && p.bombCd > 0) {
+        p.bombCd = 0; A.sfx('repair'); popup(p.x, p.y + 22, 'RELOADED', '#ffb04a', 9);
+      } else {
+        p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode');
+        popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 9);
       }
     }
-    if (inp.mode) { inp.mode = false; p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode'); popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 7); }
-    // fuel: slow passive drain (half of the old rate), stall + crash when dry
-    if (phase === 'stage' || phase === 'boss' || phase === 'warning') p.fuel -= (0.21 + 0.025 * Math.min(D(), 8)) * ST.fuelDrain * dt;
-    if (p.fuel <= 0) {
-      p.fuel = 0; if (p.stall <= 0) { radio('nofuel'); A.sfx('sputter'); }
-      p.stall += dt; if (((p.stall * 3) | 0) !== (((p.stall - dt) * 3) | 0)) A.sfx('sputter');
-      if (p.stall > 3.5) { popup(p.x, p.y - 20, 'OUT OF FUEL', '#ff5a4a', 8); killPlayer(); return; }
-    } else p.stall = 0;
     // armor: optional self-repair; an engine fire slowly eats armor (never below 1) unless suppressed
     if (ST.regen > 0 && af < 0.6) p.armor = Math.min(ST.armorMax * 0.6, p.armor + ST.regen * dt);
     if (ds >= 3 && !ST.fireSuppress) p.armor = Math.max(1, p.armor - 0.35 * dt);
     p.fireCd -= dt; p.bombCd -= dt;
     const want = inp.fire || inp.touching;
-    if (p.loopT <= 0 && p.stall <= 0) {
+    if (p.loopT <= 0) {
       if (p.mode === 'guns') { if ((want || run.gun.type === 'auto') && p.fireCd <= 0) fireGuns(p); }
       else if (want && p.bombCd <= 0) fireBombs(p);
     }
-    if (p.fuel < ST.fuelMax * 0.22) { lowBeep -= dt; if (lowBeep <= 0) { lowBeep = 1.2; A.sfx('low'); } if (p.fuel < ST.fuelMax * 0.2) radio('lowfuel'); }
     // trailing smoke / fire from a damaged engine
     if (ds >= 2 && Math.random() < dt * (ds >= 3 ? 26 : 12)) {
       const ex = p.x + (p.engSide || (p.engSide = Math.random() < 0.5 ? -8.4 : 8.4)), ey = p.y - 4;

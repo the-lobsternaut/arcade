@@ -15,7 +15,7 @@
   let player = null, boss = null, run = null, ST = null;
   const nukes = [], pb = [], eb = [], enemies = [], hulks = [], pickups = [], parts = [], fx = [], popups = [], islands = [], clouds = [], warns = [], zones = [], wing = [], groups = new Map();
   let missionStart = null, abortArmUntil = 0;
-  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, powSpawned = 0, playT = 0, radioCd = {};
+  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, powSpawned = 0, playT = 0, radioCd = {};
   const POWTRACK = { drops: 0, t: 0, since: 0 }; // POW pacing: random drops need a 7 s gap, a supply drop guarantees one every ~12.5 s
 
   const G = S.game = {
@@ -32,24 +32,26 @@
   }
   const has = (id) => run && run.tech.indexOf(id) >= 0;
   function computeStats() {
-    const s = { speed: 155, gunDmg: 1, fireRate: 1, bombRadius: 1, bombReload: 1, armorMax: 100, dmgTaken: 1, fuelMax: 100, fuelDrain: 1, magnet: 0, loopCost: 5, loopCd: 0.6,
-      powLuck: 1, regen: 0, fireSuppress: false, gunCap: 1, bombCap: 1, wingSlots: 0, wingArmor: 1, wingDmg: 1, nukeYield: 1, nukeReload: 1, quad: false, ebSpeed: 1 };
+    const s = { speed: 155, gunDmg: 1, fireRate: 1, bombRadius: 1, bombReload: 1, armorMax: 100, dmgTaken: 1, magnet: 0, loopCd: 0.6,
+      powLuck: 1, regen: 0, fireSuppress: false, gunCap: 1, bombCap: 1, wingSlots: 0, wingArmor: 1, wingDmg: 1, nukeYield: 1, nukeReload: 1, quad: false, ebSpeed: 1,
+      meritMul: 1, repairGain: 1 };
     if (has('a1')) s.armorMax += 25; if (has('a2')) s.armorMax += 25; if (has('a3')) s.dmgTaken *= 0.85; if (has('a4')) s.regen += 0.5; if (has('a5')) s.fireSuppress = true;
     if (has('g1')) s.gunCap = 2; if (has('g2')) s.gunCap = 3; if (has('g3')) s.fireRate *= 1.15; if (has('g4')) s.gunDmg *= 1.2; if (has('g5')) s.quad = true;
     if (has('b1')) s.bombCap = 2; if (has('b2')) s.bombCap = 3; if (has('b3')) s.bombReload *= 0.8; if (has('b4')) s.bombRadius *= 1.2; if (has('b5')) { s.nukeYield = 1.15; s.nukeReload = 0.8; }
-    if (has('s1')) s.fuelMax += 30; if (has('s2')) s.fuelDrain *= 0.75; if (has('s3')) s.magnet = 38; if (has('s4')) { s.loopCost = 3; s.loopCd = 0.25; }
+    if (has('s1')) s.meritMul *= 1.2; if (has('s2')) s.repairGain *= 1.5; if (has('s3')) s.magnet = 38; if (has('s4')) s.loopCd = 0.25;
     if (has('s5')) s.wingSlots = 1; if (has('s6')) s.wingSlots = 2; if (has('s7')) s.wingArmor = 1.5;
     const cp = STORY().copilot ? STORY().copilot(run ? run.copilot : null) : null;
     if (cp && cp.mods) {
       const m = cp.mods;
       for (const k in m) {
         if (k === 'fireSuppress') s.fireSuppress = s.fireSuppress || m[k];
-        else if (k === 'armorMax' || k === 'fuelMax' || k === 'magnet' || k === 'regen' || k === 'loopCost') s[k] += m[k];
+        else if (!(k in s)) continue;                 // a mod for a stat that no longer exists
+        else if (k === 'armorMax' || k === 'magnet' || k === 'regen') s[k] += m[k];
         else if (k === 'loopCd') s.loopCd *= m[k];
         else s[k] *= m[k];
       }
     }
-    s.armorMax = Math.round(s.armorMax); s.fuelMax = Math.round(s.fuelMax); s.loopCost = Math.max(2, s.loopCost);
+    s.armorMax = Math.round(s.armorMax);
     return s;
   }
   G.computeStats = (r) => { const o = run; if (r) run = r; const s = computeStats(); run = o; return s; };
@@ -86,7 +88,7 @@
   const bspeed = () => Math.min(172, 98 + 9 * D()) * (ST ? ST.ebSpeed : 1);
 
   function makePlayer() {
-    return { x: W / 2, y: H - 70, fuel: ST.fuelMax, armor: ST.armorMax, mode: 'guns', fireCd: 0, bombCd: 0, loopT: 0, loopCd: 0, inv: 1.2, dead: false, deadT: 0, bank: 0, side: 0, flash: 0, stall: 0, burnT: 0, hitT: 0, bombFlash: 0 };
+    return { x: W / 2, y: H - 70, armor: ST.armorMax, mode: 'guns', fireCd: 0, bombCd: 0, loopT: 0, loopCd: 0, inv: 1.2, dead: false, deadT: 0, bank: 0, side: 0, flash: 0, burnT: 0, hitT: 0, bombFlash: 0 };
   }
   function beginStage(r) {
     run = r; stage = run.stage; score = run.score; ST = computeStats();
@@ -162,5 +164,5 @@
     score += n;
     if (show !== false && x !== undefined) popups.push({ x, y, txt: String(n), t: 0, col: '#fff', s: 7 });
   }
-  function merit(n) { if (run) run.merit += Math.round(n); }
+  function merit(n) { if (run) run.merit += Math.round(n * (ST ? ST.meritMul : 1)); }
   function popup(x, y, txt, col, s) { popups.push({ x, y, txt, t: 0, col: col || '#fff', s: s || 8 }); }

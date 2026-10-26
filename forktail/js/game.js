@@ -3,7 +3,7 @@ window.SKY = window.SKY || {};
 (function (S) {
   'use strict';
   const A = S.audio, SP = S.sprites;
-  const W = 270, HUD_H = 36, SCROLL = 26, TAU = Math.PI * 2;
+  const W = 270, HUD_H = 46, SCROLL = 26, TAU = Math.PI * 2;
   // ---- altitude is a rendering property, not a game axis. Aircraft fly in the air, anything
   // that floats sits on the water, and that is all it ever decides: which height the renderer
   // draws a thing at, and where its shadow falls. 3D mode is a camera change. It does not gate
@@ -33,17 +33,17 @@ window.SKY = window.SKY || {};
   const POW = { // shooting a medallion cycles within its family
     gun: ['spread', 'laser', 'shotgun', 'auto', 'gunup'],
     bomb: ['cluster', 'napalm', 'torpedo', 'rapid', 'nuke'],
-    fuel: ['fuel'], repair: ['repair'],
+    repair: ['repair'],
   };
   const POW_INFO = {
     spread: ['3W', 'Gun: 3-Way spread'], laser: ['L', 'Gun: piercing laser'], shotgun: ['S', 'Gun: shotgun, eats bullets'], auto: ['A', 'Gun: auto-fire, fast'], gunup: ['+', 'Gun level up'],
     cluster: ['C', 'Bomb: cluster bomblets'], napalm: ['F', 'Bomb: napalm fire carpet'], torpedo: ['T', 'Bomb: torpedo vs ships'], rapid: ['R', 'Bomb: rapid light bombs'], nuke: ['N', 'Bomb: N-bomb, 50x, 1/3 screen'],
-    fuel: ['FUEL', 'Fuel refill'], repair: ['REP', 'Armor repair'],
+    repair: ['REP', 'Armor repair'],
   };
-  // 50x base per-bullet damage (1), radius = 1/3 playfield width. Thirty seconds between shots: a
-  // weapon that clears a third of the screen cannot also be your primary, so the reload is the
-  // balance. Levels shave it down, they do not make it spammable.
-  const NUKE = { dmg: 50, radius: W / 3, cd: 5, lvlCut: 0.1 };
+  // 250x base per-bullet damage (1), radius = 1/3 playfield width. It is meant to settle a boss:
+  // the heaviest hull in the campaign is a tier-5 carrier at about 480, so two of these end it and
+  // three end anything. The reload is the only thing holding it back. Levels shave that down.
+  const NUKE = { dmg: 250, radius: W / 3, cd: 5, lvlCut: 0.1 };
 
   // ---------------------------------------------------------------- tech tree (prerequisites + costs, in MERIT)
   const TECH = [
@@ -62,10 +62,10 @@ window.SKY = window.SKY || {};
     { id: 'b3', br: 'BOMBS', name: 'Fast Racks', cost: 300, req: ['b1'], desc: '20% faster bomb reload.' },
     { id: 'b4', br: 'BOMBS', name: 'Heavy Charge', cost: 350, req: ['b1'], desc: '+20% blast radius.' },
     { id: 'b5', br: 'BOMBS', name: 'N-Yield', cost: 700, req: ['b2', 'b4'], desc: 'N-bomb: +15% radius, 20% faster reload.' },
-    { id: 's1', br: 'SUPPORT', name: 'Drop Tanks', cost: 200, req: [], desc: '+30 max fuel.' },
-    { id: 's2', br: 'SUPPORT', name: 'Lean Mixture', cost: 300, req: ['s1'], desc: 'Fuel drains 25% slower.' },
+    { id: 's1', br: 'SUPPORT', name: 'Salvage Crew', cost: 200, req: [], desc: '+20% Merit from every kill.' },
+    { id: 's2', br: 'SUPPORT', name: 'Field Mechanics', cost: 300, req: ['s1'], desc: 'REPAIR kits patch 50% more armor.' },
     { id: 's3', br: 'SUPPORT', name: 'Pickup Magnet', cost: 250, req: [], desc: 'Power-ups drift toward you.' },
-    { id: 's4', br: 'SUPPORT', name: 'Loop Trim', cost: 300, req: ['s3'], desc: 'Loop costs less and recovers faster.' },
+    { id: 's4', br: 'SUPPORT', name: 'Loop Trim', cost: 300, req: ['s3'], desc: 'Loop recovers more than twice as fast.' },
     { id: 's5', br: 'SUPPORT', name: 'Wingman Slot I', cost: 400, req: [], desc: 'Fly with one wingman.' },
     { id: 's6', br: 'SUPPORT', name: 'Wingman Slot II', cost: 700, req: ['s5'], desc: 'Fly with two wingmen.' },
     { id: 's7', br: 'SUPPORT', name: 'Wingman Armor', cost: 350, req: ['s5'], desc: 'Wingmen are 50% tougher.' },
@@ -93,7 +93,7 @@ window.SKY = window.SKY || {};
   let player = null, boss = null, run = null, ST = null;
   const nukes = [], pb = [], eb = [], enemies = [], hulks = [], pickups = [], parts = [], fx = [], popups = [], islands = [], clouds = [], warns = [], zones = [], wing = [], groups = new Map();
   let missionStart = null, abortArmUntil = 0;
-  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, lowBeep = 0, powSpawned = 0, playT = 0, radioCd = {};
+  let gid = 1, scrollY = 0, shake = 0, flashT = 0, lastBlast = null, blastCount = 0, loadP = 0, nextIsland = 0, nextCloud = 0, nextHigh = 4, powSpawned = 0, playT = 0, radioCd = {};
   const POWTRACK = { drops: 0, t: 0, since: 0 }; // POW pacing: random drops need a 7 s gap, a supply drop guarantees one every ~12.5 s
 
   const G = S.game = {
@@ -110,24 +110,26 @@ window.SKY = window.SKY || {};
   }
   const has = (id) => run && run.tech.indexOf(id) >= 0;
   function computeStats() {
-    const s = { speed: 155, gunDmg: 1, fireRate: 1, bombRadius: 1, bombReload: 1, armorMax: 100, dmgTaken: 1, fuelMax: 100, fuelDrain: 1, magnet: 0, loopCost: 5, loopCd: 0.6,
-      powLuck: 1, regen: 0, fireSuppress: false, gunCap: 1, bombCap: 1, wingSlots: 0, wingArmor: 1, wingDmg: 1, nukeYield: 1, nukeReload: 1, quad: false, ebSpeed: 1 };
+    const s = { speed: 155, gunDmg: 1, fireRate: 1, bombRadius: 1, bombReload: 1, armorMax: 100, dmgTaken: 1, magnet: 0, loopCd: 0.6,
+      powLuck: 1, regen: 0, fireSuppress: false, gunCap: 1, bombCap: 1, wingSlots: 0, wingArmor: 1, wingDmg: 1, nukeYield: 1, nukeReload: 1, quad: false, ebSpeed: 1,
+      meritMul: 1, repairGain: 1 };
     if (has('a1')) s.armorMax += 25; if (has('a2')) s.armorMax += 25; if (has('a3')) s.dmgTaken *= 0.85; if (has('a4')) s.regen += 0.5; if (has('a5')) s.fireSuppress = true;
     if (has('g1')) s.gunCap = 2; if (has('g2')) s.gunCap = 3; if (has('g3')) s.fireRate *= 1.15; if (has('g4')) s.gunDmg *= 1.2; if (has('g5')) s.quad = true;
     if (has('b1')) s.bombCap = 2; if (has('b2')) s.bombCap = 3; if (has('b3')) s.bombReload *= 0.8; if (has('b4')) s.bombRadius *= 1.2; if (has('b5')) { s.nukeYield = 1.15; s.nukeReload = 0.8; }
-    if (has('s1')) s.fuelMax += 30; if (has('s2')) s.fuelDrain *= 0.75; if (has('s3')) s.magnet = 38; if (has('s4')) { s.loopCost = 3; s.loopCd = 0.25; }
+    if (has('s1')) s.meritMul *= 1.2; if (has('s2')) s.repairGain *= 1.5; if (has('s3')) s.magnet = 38; if (has('s4')) s.loopCd = 0.25;
     if (has('s5')) s.wingSlots = 1; if (has('s6')) s.wingSlots = 2; if (has('s7')) s.wingArmor = 1.5;
     const cp = STORY().copilot ? STORY().copilot(run ? run.copilot : null) : null;
     if (cp && cp.mods) {
       const m = cp.mods;
       for (const k in m) {
         if (k === 'fireSuppress') s.fireSuppress = s.fireSuppress || m[k];
-        else if (k === 'armorMax' || k === 'fuelMax' || k === 'magnet' || k === 'regen' || k === 'loopCost') s[k] += m[k];
+        else if (!(k in s)) continue;                 // a mod for a stat that no longer exists
+        else if (k === 'armorMax' || k === 'magnet' || k === 'regen') s[k] += m[k];
         else if (k === 'loopCd') s.loopCd *= m[k];
         else s[k] *= m[k];
       }
     }
-    s.armorMax = Math.round(s.armorMax); s.fuelMax = Math.round(s.fuelMax); s.loopCost = Math.max(2, s.loopCost);
+    s.armorMax = Math.round(s.armorMax);
     return s;
   }
   G.computeStats = (r) => { const o = run; if (r) run = r; const s = computeStats(); run = o; return s; };
@@ -164,7 +166,7 @@ window.SKY = window.SKY || {};
   const bspeed = () => Math.min(172, 98 + 9 * D()) * (ST ? ST.ebSpeed : 1);
 
   function makePlayer() {
-    return { x: W / 2, y: H - 70, fuel: ST.fuelMax, armor: ST.armorMax, mode: 'guns', fireCd: 0, bombCd: 0, loopT: 0, loopCd: 0, inv: 1.2, dead: false, deadT: 0, bank: 0, side: 0, flash: 0, stall: 0, burnT: 0, hitT: 0, bombFlash: 0 };
+    return { x: W / 2, y: H - 70, armor: ST.armorMax, mode: 'guns', fireCd: 0, bombCd: 0, loopT: 0, loopCd: 0, inv: 1.2, dead: false, deadT: 0, bank: 0, side: 0, flash: 0, burnT: 0, hitT: 0, bombFlash: 0 };
   }
   function beginStage(r) {
     run = r; stage = run.stage; score = run.score; ST = computeStats();
@@ -240,7 +242,7 @@ window.SKY = window.SKY || {};
     score += n;
     if (show !== false && x !== undefined) popups.push({ x, y, txt: String(n), t: 0, col: '#fff', s: 7 });
   }
-  function merit(n) { if (run) run.merit += Math.round(n); }
+  function merit(n) { if (run) run.merit += Math.round(n * (ST ? ST.meritMul : 1)); }
   function popup(x, y, txt, col, s) { popups.push({ x, y, txt, t: 0, col: col || '#fff', s: s || 8 }); }
 
   // ---------------------------------------------------------------- spawning
@@ -403,14 +405,9 @@ window.SKY = window.SKY || {};
     A.music('boss' + (((stage - 1) % 2) + 1));
   }
   function dropPow(x, y, fam) {
-    if (!fam) {
-      // weapon power-ups are gone: armament is chosen in the hangar. Only fuel and repair drop.
-      const p = player, fuelNeed = p ? 1 - p.fuel / ST.fuelMax : 0, armNeed = p ? 1 - p.armor / ST.armorMax : 0;
-      const wg = { fuel: 0.5 + fuelNeed * 0.6, repair: 0.5 + armNeed * 0.6 };
-      let tot = 0; for (const k in wg) tot += wg[k];
-      let r = Math.random() * tot; fam = 'fuel';
-      for (const k in wg) { r -= wg[k]; if (r <= 0) { fam = k; break; } }
-    }
+    // weapon power-ups are gone: armament is chosen in the hangar, and so is everything else you
+    // carry. Armor is the only thing a mission can hand you now, so REPAIR is the only drop.
+    if (!fam) fam = 'repair';
     pickups.push({ id: gid++, fam, x: clamp(x, 14, W - 14), y: Math.max(y, HUD_H + 14), vy: -24, t: 0, ti: 0, cd: 0 });
     powSpawned++; POWTRACK.drops++; POWTRACK.since = 0;
   }
@@ -526,9 +523,8 @@ window.SKY = window.SKY || {};
     p.dmg = ds;
     let wob = 0;
     if (ds >= 3 && !ST.fireSuppress) wob = Math.sin(time * 7.3) * 9 * dt + Math.sin(time * 3.1) * 5 * dt;
-    if (p.stall > 0) wob += Math.sin(time * 11) * 14 * dt;
-    const sp = ST.speed * (p.stall > 0 ? 0.6 : 1);
-    p.x += inp.ax * sp * dt + inp.dx + wob; p.y += inp.ay * sp * dt + inp.dy + (p.stall > 0 ? 8 * dt : 0); inp.dx = inp.dy = 0;
+    const sp = ST.speed;
+    p.x += inp.ax * sp * dt + inp.dx + wob; p.y += inp.ay * sp * dt + inp.dy; inp.dx = inp.dy = 0;
     p.x = clamp(p.x, 12, W - 12); p.y = clamp(p.y, HUD_H + 18, H - 16);
     const mv = (p.x - ox) / Math.max(dt, 1e-3);
     p.bank += (clamp(mv / 140, -1, 1) - p.bank) * Math.min(1, dt * 9);
@@ -540,29 +536,31 @@ window.SKY = window.SKY || {};
     if (p.loopT > 0) { p.loopT -= dt; if (p.loopT <= 0) { p.loopT = 0; p.inv = Math.max(p.inv, 0.25); p.loopCd = ST.loopCd; } }
     if (inp.loop) {
       inp.loop = false;
-      if (p.loopT <= 0 && p.loopCd <= 0) {
-        if (p.fuel > ST.loopCost + 1) { p.loopT = LOOP_TIME; p.fuel -= ST.loopCost; A.sfx('loop'); popup(p.x, p.y + 20, 'LOOP', '#9fd8ff', 6); }
-        else A.sfx('denied');
+      // the loop is free; the only thing between you and the next one is the recovery
+      if (p.loopT <= 0 && p.loopCd <= 0) { p.loopT = LOOP_TIME; A.sfx('loop'); popup(p.x, p.y + 20, 'LOOP', '#9fd8ff', 8); }
+    }
+    // The mode button does the obvious thing with the bomb still reloading: it reloads it. Tapping
+    // a dead bomb and being handed the machine guns instead was the wrong answer to the only
+    // question you are asking at that moment. Once the rack is full the button goes back to being
+    // the weapon switch.
+    if (inp.mode) {
+      inp.mode = false;
+      if (p.mode === 'bombs' && p.bombCd > 0) {
+        p.bombCd = 0; A.sfx('repair'); popup(p.x, p.y + 22, 'RELOADED', '#ffb04a', 9);
+      } else {
+        p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode');
+        popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 9);
       }
     }
-    if (inp.mode) { inp.mode = false; p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode'); popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 7); }
-    // fuel: slow passive drain (half of the old rate), stall + crash when dry
-    if (phase === 'stage' || phase === 'boss' || phase === 'warning') p.fuel -= (0.21 + 0.025 * Math.min(D(), 8)) * ST.fuelDrain * dt;
-    if (p.fuel <= 0) {
-      p.fuel = 0; if (p.stall <= 0) { radio('nofuel'); A.sfx('sputter'); }
-      p.stall += dt; if (((p.stall * 3) | 0) !== (((p.stall - dt) * 3) | 0)) A.sfx('sputter');
-      if (p.stall > 3.5) { popup(p.x, p.y - 20, 'OUT OF FUEL', '#ff5a4a', 8); killPlayer(); return; }
-    } else p.stall = 0;
     // armor: optional self-repair; an engine fire slowly eats armor (never below 1) unless suppressed
     if (ST.regen > 0 && af < 0.6) p.armor = Math.min(ST.armorMax * 0.6, p.armor + ST.regen * dt);
     if (ds >= 3 && !ST.fireSuppress) p.armor = Math.max(1, p.armor - 0.35 * dt);
     p.fireCd -= dt; p.bombCd -= dt;
     const want = inp.fire || inp.touching;
-    if (p.loopT <= 0 && p.stall <= 0) {
+    if (p.loopT <= 0) {
       if (p.mode === 'guns') { if ((want || run.gun.type === 'auto') && p.fireCd <= 0) fireGuns(p); }
       else if (want && p.bombCd <= 0) fireBombs(p);
     }
-    if (p.fuel < ST.fuelMax * 0.22) { lowBeep -= dt; if (lowBeep <= 0) { lowBeep = 1.2; A.sfx('low'); } if (p.fuel < ST.fuelMax * 0.2) radio('lowfuel'); }
     // trailing smoke / fire from a damaged engine
     if (ds >= 2 && Math.random() < dt * (ds >= 3 ? 26 : 12)) {
       const ex = p.x + (p.engSide || (p.engSide = Math.random() < 0.5 ? -8.4 : 8.4)), ey = p.y - 4;
@@ -817,12 +815,16 @@ window.SKY = window.SKY || {};
             const r = t.big ? 9 : 6, bx = tx + Math.sin(t.ang) * r, by = ty - Math.cos(t.ang) * r;
             t.muzzle = 0.08;
             ebAlt = altOf(h);
+            // Half the rounds, on a beat. A turret that fires every 3.0 seconds is a turret you
+            // can count; one that fires every 2.6 to 3.4 is weather. The spreads are wider too -
+            // a two-round fan at 0.16 radians is a needle aimed at where you were, and the only
+            // way past it is to already have moved. Opened up, it is a gap you can fly into.
             if (t.kind === 'main') {
-              if (h.isBoss) { warnAt(p.x + rand(-10, 10), p.y + rand(-10, 10), 22, 1.15, 14); aimedShot(bx, by, 0.16, 2); t.cd = rand(2.6, 3.4) / firem(); }
-              else { aimedShot(bx, by, 0.16, 2); t.cd = rand(2.2, 3) / firem(); }
-            } else if (t.kind === 'tail') { aimedShot(bx, by, 0.08, 3 + (h.bphase - 1), bspeed() * 1.1); t.cd = rand(1.4, 2) / firem(); }
-            else if (t.kind === 'dorsal') { aimedShot(bx, by, 0.2, 2); t.cd = rand(1.6, 2.2) / firem(); }
-            else { aimedShot(bx, by, 0, 1); t.cd = rand(1.6, 2.4) / firem(); }
+              if (h.isBoss) { warnAt(p.x + rand(-10, 10), p.y + rand(-10, 10), 22, 1.15, 14); aimedShot(bx, by, 0.3, 1); t.cd = 3.0 / firem(); }
+              else { aimedShot(bx, by, 0.3, 1); t.cd = 2.6 / firem(); }
+            } else if (t.kind === 'tail') { aimedShot(bx, by, 0.22, 2, bspeed() * 1.05); t.cd = 1.8 / firem(); }
+            else if (t.kind === 'dorsal') { aimedShot(bx, by, 0.34, 1); t.cd = 2.0 / firem(); }
+            else { aimedShot(bx, by, 0, 1); t.cd = 2.2 / firem(); }
           }
         }
       }
@@ -832,16 +834,17 @@ window.SKY = window.SKY || {};
     sweep(hulks, (h) => h.dead && h.deadT > (h.kind === 'ship' ? 4.5 : 2.6));
   }
   function bossAttacks(h, dt) {
-    h.atkT -= dt; h.atk2T -= dt; h.atk3T -= dt;
+    h.atkT -= dt; h.atk2T -= dt; h.atk3T -= dt; h.atk4T = (h.atk4T || 0) - dt;
     const ph = h.bphase, f = firem();
     if (h.type === 'bossShip') {
-      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y - 18, 10 + Math.min(8, D() * 2), 72, h.t); h.atkT = (ph === 3 ? 2.2 : 4) / f; }
+      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y - 18, 5 + Math.min(4, D()), 72, h.ringOff = (h.ringOff || 0) + 0.4); h.atkT = (ph === 3 ? 2.4 : 4) / f; }
       if (ph >= 2 && h.atk2T <= 0) { for (const s of [-1, 1]) spawnPT(clamp(h.x + s * (h.w * 0.5 + 18), 14, W - 14), h.y - h.h * 0.2); h.atk2T = 7.5; }
-      if (h.atk3T <= 0) { aimedShot(h.x, h.y - 30, 0.13, ph === 3 ? 7 : 5, bspeed() * 0.9); h.atk3T = (ph === 3 ? 2.4 : 4.2) / f; }
-      if (ph === 3 && Math.random() < dt * 0.8) ring(h.x, h.y, 8, 60, h.t * 2);
+      if (h.atk3T <= 0) { aimedShot(h.x, h.y - 30, 0.26, ph === 3 ? 4 : 3, bspeed() * 0.9); h.atk3T = (ph === 3 ? 2.6 : 4.2) / f; }
+      // the extra phase-three ring is on the clock as well, not on a dice roll
+      if (ph === 3 && h.atk4T <= 0) { ring(h.x, h.y, 4, 60, (h.ringOff || 0) + 0.8); h.atk4T = 2.0 / f; }
     } else if (h.type === 'bossBomber') {
       if (!h.arrived) return;
-      if (h.atkT <= 0) { ring(h.x, h.y, 12 + Math.min(8, D() * 2), 70, h.t * 0.7); h.atkT = (ph === 3 ? 2.6 : 3.4) / f; }
+      if (h.atkT <= 0) { ring(h.x, h.y, 6 + Math.min(4, D()), 70, h.ringOff = (h.ringOff || 0) + 0.45); h.atkT = (ph === 3 ? 2.6 : 3.4) / f; }
       if (h.atk2T <= 0) {
         if (ph === 1) { const g = newGroup(2, false); for (const s of [-1, 1]) spawnZero({ pat: 'escort', dir: s, x0: clamp(h.x + s * 40, 20, W - 20), y0: h.y + 10, delay: 0 }, false, g); h.atk2T = 7; }
         else if (ph === 2) { // carpet of flak, telegraphed across the screen
@@ -850,12 +853,13 @@ window.SKY = window.SKY || {};
           h.atk2T = 6;
         } else { const g = newGroup(3, false); for (let i = 0; i < 3; i++) { const e = spawnZero({ pat: 'dive', dir: 1, x0: rand(30, W - 30), y0: 0, delay: i * 0.4 }, false, g); e.kami = true; e.canFire = false; } h.atk2T = 5.5; }
       }
-      if (ph === 3) { h.spiral = (h.spiral || 0) + dt; if (h.atk3T <= 0) { const a = h.spiral * 3.1; for (const o of [0, Math.PI]) eb.push({ x: h.x, y: h.y + 10, vx: Math.cos(a + o) * 80, vy: Math.sin(a + o) * 80, k: 0 }); h.atk3T = 0.14 / Math.sqrt(f); } }
+      // the spiral keeps both arms - the shape is the whole point of it - and halves its rate
+      if (ph === 3) { h.spiral = (h.spiral || 0) + dt; if (h.atk3T <= 0) { const a = h.spiral * 2.2; for (const o of [0, Math.PI]) eb.push({ x: h.x, y: h.y + 10, alt: altOf(h), vx: Math.cos(a + o) * 80, vy: Math.sin(a + o) * 80, k: 0 }); h.atk3T = 0.28 / Math.sqrt(f); } }
     } else if (h.type === 'carrier') {
-      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y, 10 + Math.min(8, D() * 2), 70, h.t); h.atkT = (ph === 3 ? 2.4 : 3.8) / f; }
+      if (ph >= 2 && h.atkT <= 0) { ring(h.x, h.y, 5 + Math.min(4, D()), 70, h.ringOff = (h.ringOff || 0) + 0.42); h.atkT = (ph === 3 ? 2.4 : 3.8) / f; }
       if (ph >= 2 && h.atk2T <= 0) { waveBombers(clamp(h.x, 60, W - 60)); h.atk2T = 9; }
-      if (h.atk3T <= 0) { aimedShot(h.x + h.w * 0.3, h.y, 0.15, ph === 3 ? 5 : 3); h.atk3T = (ph === 3 ? 1.8 : 3.2) / f; }
-      if (ph === 3 && Math.random() < dt * 1.2) { const a = h.t * 2.4; for (let i = 0; i < 3; i++) eb.push({ x: h.x, y: h.y, vx: Math.cos(a + i * 2.09) * 75, vy: Math.sin(a + i * 2.09) * 75, k: 0 }); }
+      if (h.atk3T <= 0) { aimedShot(h.x + h.w * 0.3, h.y, 0.3, ph === 3 ? 3 : 2); h.atk3T = (ph === 3 ? 2.0 : 3.2) / f; }
+      if (ph === 3 && h.atk4T <= 0) { const a = h.t * 2.4; for (let i = 0; i < 3; i++) eb.push({ x: h.x, y: h.y, alt: altOf(h), vx: Math.cos(a + i * 2.09) * 75, vy: Math.sin(a + i * 2.09) * 75, k: 0 }); h.atk4T = 1.6 / f; }
     }
   }
   function hitHulk(h, x, y) {
@@ -923,10 +927,9 @@ window.SKY = window.SKY || {};
     eb.length = 0; warns.length = 0;
     for (const e of enemies) if (!e.dead && e.t >= 0) killEnemy(e);
     for (const x of hulks) if (!x.dead && x.pt) killHulk(x);
-    clearBonus = Math.round(player.fuel) * 50 + Math.round(player.armor) * 50;
+    clearBonus = Math.round(player.armor) * 100;      // what you brought home, at the old rate
     addScore(clearBonus);
     merit(150); if (stageHits === 0) { merit(200); popup(W / 2, H * 0.5, 'NO-DAMAGE BONUS +200 MERIT', '#9fe07a', 7); }
-    player.fuel = Math.min(ST.fuelMax, player.fuel + 35);
     A.music(null); A.sting('clear');
     radio('clear');
   }
@@ -1048,12 +1051,10 @@ window.SKY = window.SKY || {};
   function collect(k) {
     const p = player, type = POW[k.fam][k.ti];
     k.taken = true; merit(3);
-    if (type === 'fuel') {
-      const gain = Math.min(35, ST.fuelMax - p.fuel); p.fuel = Math.min(ST.fuelMax, p.fuel + 35); p.stall = 0;
-      popup(p.x, p.y - 18, gain > 0 ? 'FUEL +' + Math.round(gain) : '+500', '#ffd34a', 7); A.sfx('energy'); addScore(500);
-    } else if (type === 'repair') {
-      const gain = Math.min(35, ST.armorMax - p.armor); p.armor = Math.min(ST.armorMax, p.armor + 35);
-      popup(p.x, p.y - 18, gain > 0 ? 'REPAIR +' + Math.round(gain) : '+500', '#9fe07a', 7); A.sfx('repair'); addScore(500);
+    if (type === 'repair') {
+      const patch = 35 * ST.repairGain, gain = Math.min(patch, ST.armorMax - p.armor);
+      p.armor = Math.min(ST.armorMax, p.armor + patch);
+      popup(p.x, p.y - 18, gain > 0 ? 'REPAIR +' + Math.round(gain) : '+500', '#9fe07a', 9); A.sfx('repair'); addScore(500);
       for (const w of wing) if (!w.dead) w.armor = Math.min(w.max, w.armor + 12);
     } else if (k.fam === 'gun') {
       const g = run.gun;
@@ -1133,16 +1134,18 @@ window.SKY = window.SKY || {};
       }
       if (hit) b.life = 0;
       if (b.kind === 'pellet') {
-        for (const e of eb) if (!e.gone && swept(b, e.x, e.y, 8)) { e.gone = true; addScore(10); }
+        for (const e of eb) if (!e.gone && swept(b, e.x, e.y, 11)) { e.gone = true; addScore(10); }
       }
     }
     sweep(eb, (e) => e.gone);
     // elevators can also be wrecked by bomb blasts only: handled in blast() through damagePart
     if (!p.dead) {
       const vulnerable = p.loopT <= 0;
+      // The rounds are twice the size they were, so they take up twice the space - a shell you
+      // can see and fly around has to be a shell that is actually there.
       for (const e of eb) {
-        if (vulnerable && d2(e.x, e.y, p.x, p.y) < 42) { if (hurt(7)) { e.gone = true; continue; } }
-        for (const w of wing) if (!w.dead && d2(e.x, e.y, w.x, w.y) < 30) { if (hurtWing(w, 7)) e.gone = true; }
+        if (vulnerable && d2(e.x, e.y, p.x, p.y) < 81) { if (hurt(7)) { e.gone = true; continue; } }
+        for (const w of wing) if (!w.dead && d2(e.x, e.y, w.x, w.y) < 64) { if (hurtWing(w, 7)) e.gone = true; }
       }
       sweep(eb, (e) => e.gone);
       for (const e of enemies) {
@@ -1419,16 +1422,16 @@ window.SKY = window.SKY || {};
   };
   G.togglePause = () => G.setPaused(!paused);
   G.toggleMute = () => A.toggleMute();
-  const BTN = { pause: [W - 30, 2, 13, 11], mute: [W - 15, 2, 13, 11], music: [W - 45, 2, 13, 11], fs: [W - 60, 2, 13, 11] };
+  const BTN = { pause: [W - 44, 2, 20, 17], mute: [W - 22, 2, 20, 17], music: [W - 66, 2, 20, 17], fs: [W - 88, 2, 20, 17] };
   const TITLE_BTN = { cont: null, neu: null, dossier: null, save: null };
   const PAUSE_BTN = { mode: null, abort: null };   // the same 2D/3D switch, reachable mid-mission
   G.abortArmed = () => abortArmUntil > Date.now();
   function inRect(x, y, r, pad) { return r && x >= r[0] - pad && x <= r[0] + r[2] + pad && y >= r[1] - pad && y <= r[1] + r[3] + pad; }
   // Both thumb buttons sit together under the middle of the field rather than tucked into the
   // right corner, and they are big enough to hit without looking down at them.
-  const BTN_R = 19;
-  function loopBtn() { return [W / 2 + 24, H - 30, BTN_R]; }
-  function modeBtn() { return [W / 2 - 24, H - 30, BTN_R]; }
+  const BTN_R = 25;
+  function loopBtn() { return [W / 2 + 33, H - 36, BTN_R]; }
+  function modeBtn() { return [W / 2 - 33, H - 36, BTN_R]; }
   G.handleTap = function (x, y) {
     if (inRect(x, y, BTN.mute, 3)) { A.toggleMute(); return true; }
     if (inRect(x, y, BTN.music, 3)) { A.toggleMusic(); return true; }
@@ -1519,7 +1522,7 @@ window.SKY = window.SKY || {};
         if (b.kind === 'torp') { base(); ctx.fillStyle = 'rgba(220,240,255,0.8)'; ctx.fillRect(b.x - 0.7, b.y - 4, 1.4, 8); continue; }
         spr(b.kind === 'laser' ? SP.laser : b.kind === 'pellet' ? SP.pellet : SP.pbullet, b.x, b.y, Math.atan2(b.vy, b.vx) + Math.PI / 2);
       }
-      base(); const s = SP.ebullet; if (s) for (const b of eb) ctx.drawImage(s.c, b.x - 4.4, b.y - 4.4, 8.8, 8.8);
+      base(); const s = SP.ebullet; if (s) for (const b of eb) ctx.drawImage(s.c, b.x - 8.8, b.y - 8.8, 17.6, 17.6);
     }
     for (const w of warns) { if (w.friendly) continue; base(); const u = w.t / w.dur; ctx.strokeStyle = `rgba(255,60,40,${0.4 + 0.5 * u})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(w.x, w.y, w.r * (1.4 - 0.4 * u), 0, TAU); ctx.stroke(); }
     for (const q of parts) {
@@ -1557,6 +1560,10 @@ window.SKY = window.SKY || {};
     plate(x, y, w, h, 2);
     ctx.fillStyle = '#efe6cf'; ctx.strokeStyle = '#efe6cf';
     const cx = x + w / 2, cy = y + h / 2;
+    // the marks below are drawn for the 13-wide plate these used to be; scale the whole face
+    // about its centre instead of respacing every line of them
+    const k = w / 13;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy);
     if (kind === 'pause') {
       if (on) { ctx.beginPath(); ctx.moveTo(cx - 2, cy - 3); ctx.lineTo(cx + 3, cy); ctx.lineTo(cx - 2, cy + 3); ctx.closePath(); ctx.fill(); }
       else { ctx.fillRect(cx - 2.6, cy - 3, 1.8, 6); ctx.fillRect(cx + 0.8, cy - 3, 1.8, 6); }
@@ -1574,6 +1581,7 @@ window.SKY = window.SKY || {};
       for (const [sx2, sy2] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(cx + sx2 * 3.6, cy + sy2 * 1.4); ctx.lineTo(cx + sx2 * 3.6, cy + sy2 * 3.2); ctx.lineTo(cx + sx2 * 1.6, cy + sy2 * 3.2); }
       ctx.stroke();
     }
+    ctx.restore();
   }
   function drawButtons() {
     hudT();
@@ -1597,41 +1605,37 @@ window.SKY = window.SKY || {};
     g.addColorStop(0, 'rgba(14,17,20,0.9)'); g.addColorStop(1, 'rgba(26,30,34,0.74)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, HUD_H);
     ctx.fillStyle = 'rgba(217,184,96,0.55)'; ctx.fillRect(0, HUD_H - 0.7, W, 0.7);
-    text('1P', 3, 7.5, 6, BRASS, 'left', 800, false);
-    text(String(score).padStart(7, '0'), 12, 7.8, 8, PAPER, 'left', 700, false, MONO);
-    text('HI', 58, 7.5, 6, BRASS, 'left', 800, false);
-    text(String(Math.max(hiscore, score)).padStart(7, '0'), 67, 7.8, 8, PAPER, 'left', 700, false, MONO);
-    text('MERIT', 113, 7.5, 5.4, BRASS, 'left', 800, false);
-    text(String(run ? run.merit : 0), 133, 7.8, 7.2, '#bfe39a', 'left', 700, false, MONO);
+    // Three rows of eight things was a cockpit, not a readout. What is left is what you can act
+    // on while you are being shot at: how much score you have, how much aeroplane you have, and
+    // what is under your thumb. The hi-score belongs to the title and the game-over screens, and
+    // Merit is spent in the hangar, where it is shown in letters you can read.
+    text(String(score).padStart(7, '0'), 3, 10.5, 13, PAPER, 'left', 700, false, MONO);
     const L = curLevel();
-    text(L ? L.short || L.name : 'STAGE ' + stage, W - 63, 7.5, 5.6, BRASS, 'right', 800, false);
+    text(L ? L.short || L.name : 'STAGE ' + stage, W - 92, 10.5, 7.6, BRASS, 'right', 800, false);
     const p = player; if (!p) return;
-    const ff = p.fuel / ST.fuelMax, af = p.armor / ST.armorMax;
-    const lowF = ff < 0.22 && ((time * 4) | 0) % 2 === 0, lowA = af < 0.2 && ((time * 4) | 0) % 2 === 1;
-    text('FUEL', 3, 18, 5.2, lowF ? '#ff5a4a' : BRASS, 'left', 800, false);
-    bar(19, 15.5, 84, 5, ff, ff > 0.5 ? '#e8c14a' : ff > 0.25 ? '#e89a3a' : '#e2482f', lowF);
-    text(String(Math.ceil(p.fuel)), 106, 18.2, 5.6, PAPER, 'left', 700, false, MONO);
-    text('ARMOR', 124, 18, 5.2, lowA ? '#ff5a4a' : BRASS, 'left', 800, false);
-    bar(146, 15.5, 84, 5, af, af > 0.7 ? '#7fcf5a' : af > 0.45 ? '#c7d24a' : af > 0.2 ? '#e8902a' : '#e2482f', lowA);
-    text(String(Math.ceil(p.armor)), 233, 18.2, 5.6, PAPER, 'left', 700, false, MONO);
+    const af = p.armor / ST.armorMax;
+    const lowA = af < 0.2 && ((time * 4) | 0) % 2 === 1;
+    text('ARMOR', 3, 27.5, 8, lowA ? '#ff5a4a' : BRASS, 'left', 800, false);
+    bar(33, 23, 168, 9, af, af > 0.7 ? '#7fcf5a' : af > 0.45 ? '#c7d24a' : af > 0.2 ? '#e8902a' : '#e2482f', lowA);
+    text(String(Math.ceil(p.armor)), 205, 27.8, 9, PAPER, 'left', 700, false, MONO);
+    // wingmen ride on the armor row now that it is the only bar up here
+    let wx = 226;
+    for (const w of wing) { text('W' + (w.slot + 1), wx, 27.8, 6.6, w.dead ? '#7a4a44' : '#9fd8ff', 'left', 800, false); if (!w.dead) bar(wx + 11, 24.2, 9, 6, w.armor / w.max, '#7fbcd8'); wx += 23; }
     // weapon modes
     const gm = p.mode === 'guns', gn = GUNS[run.gun.type], bm = BOMBS[run.bomb.type];
-    const y = 25.5;
-    ctx.fillStyle = gm ? 'rgba(255,224,102,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(2, y - 2.6, 64, 8.2);
-    ctx.fillStyle = !gm ? 'rgba(255,176,74,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(68, y - 2.6, 72, 8.2);
-    if (gm) { ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 0.6; ctx.strokeRect(2, y - 2.6, 64, 8.2); } else { ctx.strokeStyle = '#ffb04a'; ctx.lineWidth = 0.6; ctx.strokeRect(68, y - 2.6, 72, 8.2); }
-    text('GUNS', 4.5, y + 1.5, 5.4, gm ? '#ffe066' : '#8b8778', 'left', 800, false);
-    text(gn.name + ' ' + 'I'.repeat(run.gun.lvl), 23, y + 1.5, 5.4, gm ? gn.col : '#8b8778', 'left', 800, false);
-    text('BOMBS', 70.5, y + 1.5, 5.4, !gm ? '#ffb04a' : '#8b8778', 'left', 800, false);
+    const y = 39.5, ch = 12;
+    ctx.fillStyle = gm ? 'rgba(255,224,102,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(2, y - ch / 2, 120, ch);
+    ctx.fillStyle = !gm ? 'rgba(255,176,74,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(126, y - ch / 2, 142, ch);
+    ctx.strokeStyle = gm ? '#ffe066' : '#ffb04a'; ctx.lineWidth = 0.7;
+    if (gm) ctx.strokeRect(2, y - ch / 2, 120, ch); else ctx.strokeRect(126, y - ch / 2, 142, ch);
+    text('GUNS', 5, y + 0.4, 7.4, gm ? '#ffe066' : '#8b8778', 'left', 800, false);
+    text(gn.name + ' ' + 'I'.repeat(run.gun.lvl), 33, y + 0.4, 7.4, gm ? gn.col : '#8b8778', 'left', 800, false);
+    text('BOMBS', 129, y + 0.4, 7.4, !gm ? '#ffb04a' : '#8b8778', 'left', 800, false);
     const bcd = bombCooldown(run.bomb.type, run.bomb.lvl);
-    // A 30-second reload is too long to read off a 72-pixel bar, so a long one counts itself down.
+    // A 30-second reload is too long to read off a bar, so a long one counts itself down.
     const bwait = p.bombCd > 0 && bcd > 4;
-    text(bwait ? bm.name + ' ' + Math.ceil(p.bombCd) + 's' : bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 93, y + 1.5, 5.4, bwait ? '#8b8778' : !gm ? bm.col : '#8b8778', 'left', 800, false);
-    if (p.bombCd > 0) { ctx.fillStyle = gm ? 'rgba(255,176,74,0.35)' : 'rgba(255,176,74,0.7)'; ctx.fillRect(68, y + 5, 72 * (1 - clamp(p.bombCd / bcd, 0, 1)), 0.8); }
-    // wingmen armor
-    let wx = 146;
-    for (const w of wing) { text('W' + (w.slot + 1), wx, y + 1.5, 5, w.dead ? '#7a4a44' : '#9fd8ff', 'left', 800, false); if (!w.dead) bar(wx + 9, y - 0.2, 22, 3.6, w.armor / w.max, '#7fbcd8'); else text('DOWN', wx + 9, y + 1.5, 4.6, '#c85a4a', 'left', 800, false); wx += 36; }
-    text(p.loopT > 0 ? 'LOOP!' : p.loopCd > 0 ? 'LOOP..' : 'LOOP', W - 3, y + 1.5, 5.2, p.loopT > 0 ? '#9fd8ff' : (p.fuel > ST.loopCost + 1 && p.loopCd <= 0 ? '#c9c2ad' : '#5c5c5c'), 'right', 800, false);
+    text(bwait ? bm.name + ' ' + Math.ceil(p.bombCd) + 's' : bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 166, y + 0.4, 7.4, bwait ? '#8b8778' : !gm ? bm.col : '#8b8778', 'left', 800, false);
+    if (p.bombCd > 0) { ctx.fillStyle = gm ? 'rgba(255,176,74,0.35)' : 'rgba(255,176,74,0.7)'; ctx.fillRect(126, y + ch / 2 - 1.2, 142 * (1 - clamp(p.bombCd / bcd, 0, 1)), 1.2); }
     if (boss && !boss.dead && phase === 'boss') {
       const w2 = W - 80, f = boss.hp / boss.maxhp;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(39, HUD_H + 3, w2 + 2, 5);
@@ -1640,9 +1644,17 @@ window.SKY = window.SKY || {};
       text('P' + boss.bphase, 36, HUD_H + 5.6, 5.2, '#ff9c8a', 'right', 800, true);
     }
   }
-  function roundBtn(x, y, r, ok, label, glyph) {
+  // `fill` is a 0..1 level that floods the face with brass from the bottom up - a reload you can
+  // watch rather than a number you have to read.
+  function roundBtn(x, y, r, ok, label, glyph, fill) {
     ctx.globalAlpha = ok ? 0.85 : 0.4;
     ctx.fillStyle = 'rgba(20,24,28,0.55)'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    if (fill > 0) {
+      ctx.save(); ctx.clip();
+      ctx.fillStyle = 'rgba(217,184,96,' + (0.22 + 0.5 * fill).toFixed(3) + ')';
+      ctx.fillRect(x - r, y + r - 2 * r * fill, r * 2, 2 * r * fill);
+      ctx.restore();
+    }
     ctx.strokeStyle = 'rgba(217,184,96,0.85)'; ctx.lineWidth = r / 13; ctx.stroke();
     // The glyphs are drawn for a 13-unit button, so scale the whole face about its centre rather
     // than rewriting every arc and rectangle in it - resize the button and the mark follows.
@@ -1658,25 +1670,27 @@ window.SKY = window.SKY || {};
     hudT();
     const p = player;
     let [x, y, r] = loopBtn();
-    roundBtn(x, y, r, p && !p.dead && p.loopT <= 0 && p.loopCd <= 0 && p.fuel > ST.loopCost + 1, 'LOOP', () => {
+    roundBtn(x, y, r, p && !p.dead && p.loopT <= 0 && p.loopCd <= 0, 'LOOP', () => {
       ctx.strokeStyle = PAPER; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y - 2, 4.8, -Math.PI * 0.15, Math.PI * 1.45); ctx.stroke();
       const a = Math.PI * 1.45, ax = x + Math.cos(a) * 4.8, ay = y - 2 + Math.sin(a) * 4.8;
       ctx.fillStyle = PAPER; ctx.beginPath(); ctx.moveTo(ax + 2.4, ay - 0.6); ctx.lineTo(ax - 0.4, ay - 2.4); ctx.lineTo(ax - 0.6, ay + 1.5); ctx.closePath(); ctx.fill();
     });
     [x, y, r] = modeBtn();
     const gm = p && p.mode === 'guns';
-    roundBtn(x, y, r, true, gm ? 'GUNS' : 'BOMBS', () => {
+    const bcd = p ? bombCooldown(run.bomb.type, run.bomb.lvl) : 1;
+    const reloading = p && !gm && p.bombCd > 0;
+    roundBtn(x, y, r, true, reloading ? 'RELOAD' : gm ? 'GUNS' : 'BOMBS', () => {
       ctx.fillStyle = gm ? '#ffe066' : '#ffb04a';
       if (gm) { for (const dx of [-2.4, 0, 2.4]) ctx.fillRect(x + dx - 0.6, y - 6, 1.2, 6); }
       else { ctx.beginPath(); ctx.ellipse(x, y - 2.5, 2.4, 4, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - 2.6, y + 0.6, 5.2, 1); }
-    });
+    }, reloading ? 1 - clamp(p.bombCd / bcd, 0, 1) : 0);
   }
   function dim(a) { hudT(); ctx.fillStyle = `rgba(4,8,14,${a})`; ctx.fillRect(0, 0, W, H); }
   function blink(rate) { return ((time * (rate || 2.2)) | 0) % 2 === 0; }
   function menuBtn(r, label, hot) {
     const [x, y, w, h] = r; plate(x, y, w, h, 3);
     if (hot) { ctx.strokeStyle = 'rgba(245,215,122,0.9)'; ctx.lineWidth = 0.9; ctx.stroke(); }
-    text(label, x + w / 2, y + h / 2 + 0.4, 8, hot ? '#f5d77a' : PAPER, 'center', 800, false);
+    text(label, x + w / 2, y + h / 2 + 0.4, Math.min(10.5, h * 0.52), hot ? '#f5d77a' : PAPER, 'center', 800, false);
   }
 
   // USAAF national insignia (the "star and bar", adopted 28 June 1943): white star on an
@@ -1758,66 +1772,68 @@ window.SKY = window.SKY || {};
     ctx.restore();
   }
 
+  // The wordmark is a painted asset now. It is still drawn through the game's own units so it
+  // lands in the same place at every size, and the typeset version stays as the fallback for the
+  // moment before the art has loaded - or if it never does.
+  function wordmark(top) {
+    const lg = SP && SP.logo;
+    if (lg && lg.c) {
+      const w = Math.min(W - 16, 252), h = w * (lg.h / lg.w);
+      ctx.drawImage(lg.c, W / 2 - w / 2, top, w, h);
+      return top + h;
+    }
+    devilMark(W / 2, top + 10, 20);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let tsz = 60; const TW = 'FORK-TAILED', tmax = W - 36;
+    do { ctx.font = 'italic 900 ' + tsz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; tsz -= 1; }
+    while (tsz > 12 && ctx.measureText(TW).width > tmax);
+    const cy = top + 50;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#1a1206'; ctx.lineJoin = 'round'; ctx.strokeText(TW, W / 2, cy);
+    ctx.fillStyle = '#d9b860'; ctx.fillText(TW, W / 2, cy);
+    ctx.restore();
+    text('D E V I L', W / 2, cy + 20, 12, PAPER, 'center', 800, false);
+    return cy + 30;
+  }
   function drawTitle() {
     hudT();
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, 'rgba(3,8,16,0.78)'); g.addColorStop(0.45, 'rgba(3,8,16,0.15)'); g.addColorStop(1, 'rgba(3,8,16,0.78)');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const cy = Math.max(66, H * 0.17);
-    ctx.save();
-    // wordmark is auto-fitted so a long name never runs off the 270-wide playfield
-    devilMark(W / 2, cy - 42, 23);
-    const TW = 'FORK-TAILED', tmax = W - 36;
-    let tsz = 60;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    do { ctx.font = 'italic 900 ' + tsz + 'px "Arial Black", "Helvetica Neue", Arial, sans-serif'; tsz -= 1; }
-    while (tsz > 12 && ctx.measureText(TW).width > tmax);
-    const lg = ctx.createLinearGradient(0, cy - 32, 0, cy + 32);
-    lg.addColorStop(0, '#fff3cf'); lg.addColorStop(0.35, '#e6c36e'); lg.addColorStop(0.5, '#a9772e'); lg.addColorStop(0.62, '#e0b85e'); lg.addColorStop(1, '#6e4a17');
-    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
-    ctx.lineWidth = 5; ctx.strokeStyle = '#1a1206'; ctx.lineJoin = 'round'; ctx.strokeText(TW, W / 2, cy);
-    ctx.shadowColor = 'transparent';
-    ctx.fillStyle = lg; ctx.fillText(TW, W / 2, cy);
-    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(255,244,210,0.8)'; ctx.strokeText(TW, W / 2, cy);
-    ctx.restore();
-    hudT();
-    const bg = ctx.createLinearGradient(0, cy + 32, 0, cy + 50); bg.addColorStop(0, '#5a6233'); bg.addColorStop(1, '#343a1c');
-    ctx.fillStyle = bg; ctx.fillRect(30, cy + 33, W - 60, 17);
-    ctx.fillStyle = 'rgba(217,184,96,0.85)'; ctx.fillRect(30, cy + 33, W - 60, 0.7); ctx.fillRect(30, cy + 49.3, W - 60, 0.7);
-    text('D E V I L', W / 2, cy + 41.8, 11, PAPER, 'center', 800, true);
-    text('P-38 LIGHTNING  -  1941-1945 CAMPAIGN', W / 2, cy + 60, 6, '#cfd6e0', 'center', 700, true);
+    const cy = wordmark(Math.max(40, H * 0.1));
+    text('P-38 LIGHTNING  -  1941-1945 CAMPAIGN', W / 2, cy + 9, 7, '#cfd6e0', 'center', 700, true);
     { // flight model + test mode, made obvious: these were too small to find before
-      const bw = 150, bx = W / 2 - bw / 2, by0 = cy + 70, bh = 20;
+      const bw = 184, bx = W / 2 - bw / 2, by0 = cy + 26, bh = 26;
       TITLE_BTN.mode = [bx, by0, bw, bh];
       modeSwitch(bx, by0, bw, bh);
-      text('VIEW - TAP TO SWITCH', W / 2, by0 - 5, 5, '#8d94a2', 'center', 700, true);
-      text(mode3d ? 'CHASE CAMERA - SAME CONTROLS' : 'CLASSIC TOP-DOWN', W / 2, by0 + bh + 7, 5, '#cfd6e0', 'center', 700, true);
+      text('VIEW - TAP TO SWITCH', W / 2, by0 - 6, 6, '#8d94a2', 'center', 700, true);
+      text(mode3d ? 'CHASE CAMERA - SAME CONTROLS' : 'CLASSIC TOP-DOWN', W / 2, by0 + bh + 9, 6, '#cfd6e0', 'center', 700, true);
       // test mode
-      const tw = 150, tx = W / 2 - tw / 2, ty = by0 + bh + 14;
-      TITLE_BTN.test = [tx, ty, tw, 13];
+      const tw = 184, tx = W / 2 - tw / 2, ty0 = by0 + bh + 18, th = 18;
+      TITLE_BTN.test = [tx, ty0, tw, th];
       const on = G.testUnlock && G.testUnlock();
       ctx.fillStyle = on ? 'rgba(120,200,120,0.22)' : 'rgba(8,12,18,0.6)';
-      ctx.fillRect(tx, ty, tw, 13);
-      ctx.strokeStyle = on ? 'rgba(140,220,140,0.7)' : 'rgba(150,150,170,0.4)'; ctx.lineWidth = 0.6; ctx.strokeRect(tx, ty, tw, 13);
-      text(on ? 'TEST MODE ON - ALL TECH UNLOCKED' : 'TEST MODE OFF - NORMAL PROGRESSION', W / 2, ty + 7, 5.2, on ? '#aef0ae' : '#9aa0b0', 'center', 800, true);
+      ctx.fillRect(tx, ty0, tw, th);
+      ctx.strokeStyle = on ? 'rgba(140,220,140,0.7)' : 'rgba(150,150,170,0.4)'; ctx.lineWidth = 0.7; ctx.strokeRect(tx, ty0, tw, th);
+      text(on ? 'TEST MODE ON - ALL TECH UNLOCKED' : 'TEST MODE OFF - NORMAL PROGRESSION', W / 2, ty0 + th / 2 + 0.4, 6.4, on ? '#aef0ae' : '#9aa0b0', 'center', 800, true);
     }
-    const by = Math.max(cy + 150, H * 0.5);
+    const by = Math.max(cy + 118, H * 0.5);
     const save = G.hasSave();
-    TITLE_BTN.cont = save ? [W / 2 - 60, by, 120, 17] : null;
-    TITLE_BTN.neu = [W / 2 - 60, by + (save ? 21 : 0), 120, 17];
-    TITLE_BTN.dossier = [W / 2 - 60, by + (save ? 42 : 21), 58, 14];
-    TITLE_BTN.save = [W / 2 + 2, by + (save ? 42 : 21), 58, 14];
+    TITLE_BTN.cont = save ? [W / 2 - 88, by, 176, 26] : null;
+    TITLE_BTN.neu = [W / 2 - 88, by + (save ? 31 : 0), 176, 26];
+    TITLE_BTN.dossier = [W / 2 - 88, by + (save ? 62 : 31), 86, 22];
+    TITLE_BTN.save = [W / 2 + 2, by + (save ? 62 : 31), 86, 22];
     if (save) menuBtn(TITLE_BTN.cont, 'CONTINUE  -  HANGAR', blink(1.6));
     menuBtn(TITLE_BTN.neu, 'NEW CAMPAIGN', !save && blink(1.6));
     menuBtn(TITLE_BTN.dossier, 'DOSSIER', false); menuBtn(TITLE_BTN.save, 'SAVE / LOAD', false);
-    const ty = by + (save ? 66 : 45);
-    text('HI-SCORE  ' + String(hiscore).padStart(7, '0'), W / 2, ty, 7, PAPER, 'center', 700, true);
+    const ty = by + (save ? 96 : 65);
+    text('HI-SCORE  ' + String(hiscore).padStart(7, '0'), W / 2, ty, 8.5, PAPER, 'center', 700, true);
     const lines = G.touchMode
-      ? ['DRAG TO FLY - FIRE IS AUTOMATIC WHILE TOUCHING', 'MODE BUTTON: GUNS <-> BOMBS   LOOP: EVADE', 'ARM IN THE HANGAR  -  WATCH FUEL AND ARMOR']
-      : ['ARROWS/WASD MOVE   SPACE/Z FIRE   Q/TAB GUNS<->BOMBS', 'X/SHIFT LOOP   P PAUSE   M SOUND   B MUSIC   F FULLSCREEN', 'ARM IN THE HANGAR  -  WATCH FUEL AND ARMOR'];
-    const ly = Math.min(H - 36, ty + 22);
-    lines.forEach((l, i) => text(l, W / 2, ly + i * 9, 5.4, i === 2 ? '#f3b49a' : '#d8dde6', 'center', 700, true));
-    text('ORIGINAL FAN TRIBUTE - NOT AFFILIATED WITH CAPCOM', W / 2, H - 8, 4.6, 'rgba(210,214,224,0.6)', 'center', 600, false);
+      ? ['DRAG TO FLY - FIRE IS AUTOMATIC WHILE TOUCHING', 'MODE BUTTON: GUNS <-> BOMBS   LOOP: EVADE', 'ARM IN THE HANGAR  -  WATCH YOUR ARMOR']
+      : ['ARROWS/WASD MOVE   SPACE/Z FIRE   Q/TAB GUNS<->BOMBS', 'X/SHIFT LOOP   P PAUSE   M SOUND   B MUSIC   F FULLSCREEN', 'ARM IN THE HANGAR  -  WATCH YOUR ARMOR'];
+    const ly = Math.min(H - 40, ty + 26);
+    lines.forEach((l, i) => text(l, W / 2, ly + i * 10.5, 6.2, i === 2 ? '#f3b49a' : '#d8dde6', 'center', 700, true));
+    text('ORIGINAL FAN TRIBUTE - NOT AFFILIATED WITH CAPCOM', W / 2, H - 8, 5, 'rgba(210,214,224,0.6)', 'center', 600, false);
   }
   function drawLoading() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1825,15 +1841,12 @@ window.SKY = window.SKY || {};
     const g = ctx.createLinearGradient(0, 0, 0, c.height); g.addColorStop(0, '#07131f'); g.addColorStop(1, '#0b2f52');
     ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
     hudT();
-    devilMark(W / 2, H * 0.4 - 38, 20, '#e6c36e', 0.9);
-    ctx.font = 'italic 900 30px "Arial Black", Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#d9b860'; ctx.fillText('FORK-TAILED', W / 2, H * 0.4);
-    text('D E V I L', W / 2, H * 0.4 + 24, 12, PAPER, 'center', 800, false);
-    const bw = 160, bx = (W - bw) / 2, by = H * 0.4 + 52;
-    ctx.fillStyle = '#05080c'; ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
-    ctx.strokeStyle = 'rgba(217,184,96,0.7)'; ctx.lineWidth = 0.6; ctx.strokeRect(bx - 1, by - 1, bw + 2, 7);
-    ctx.fillStyle = '#d9b860'; ctx.fillRect(bx, by, bw * loadP, 5);
-    text('LOADING ' + Math.round(loadP * 100) + '%', W / 2, by + 15, 6.5, '#c9c2ad', 'center', 700, false);
+    const under = wordmark(H * 0.3);
+    const bw = 190, bx = (W - bw) / 2, by = under + 18;
+    ctx.fillStyle = '#05080c'; ctx.fillRect(bx - 1.2, by - 1.2, bw + 2.4, 9.4);
+    ctx.strokeStyle = 'rgba(217,184,96,0.7)'; ctx.lineWidth = 0.7; ctx.strokeRect(bx - 1.2, by - 1.2, bw + 2.4, 9.4);
+    ctx.fillStyle = '#d9b860'; ctx.fillRect(bx, by, bw * loadP, 7);
+    text('LOADING ' + Math.round(loadP * 100) + '%', W / 2, by + 20, 8, '#c9c2ad', 'center', 700, false);
   }
   function drawBanners() {
     hudT();
@@ -1850,11 +1863,10 @@ window.SKY = window.SKY || {};
       text(L && L.bossName ? L.bossName.toUpperCase() + ' APPROACHING' : bt === 'bossBomber' ? 'HEAVY BOMBER APPROACHING' : bt === 'carrier' ? 'ENEMY CARRIER APPROACHING' : 'ENEMY BATTLESHIP APPROACHING', W / 2, H * 0.36 + 32, 7, '#ffd8d0', 'center', 700);
     } else if (phase === 'clear' && phaseT > 1.4) {
       text('MISSION COMPLETE', W / 2, H * 0.36, 16, '#f5d77a', 'center', 800);
-      text('FUEL+ARMOR BONUS  ' + clearBonus, W / 2, H * 0.36 + 20, 8, PAPER, 'center', 700);
-      text('MERIT  ' + (run ? run.merit : 0) + '  -  TO THE HANGAR', W / 2, H * 0.36 + 33, 7, '#9fe07a', 'center', 700);
+      text('ARMOR BONUS  ' + clearBonus, W / 2, H * 0.36 + 20, 9, PAPER, 'center', 700);
+      text('MERIT  ' + (run ? run.merit : 0) + '  -  TO THE HANGAR', W / 2, H * 0.36 + 34, 8, '#9fe07a', 'center', 700);
     }
-    if (p && !p.dead && p.fuel < ST.fuelMax * 0.2 && blink(3)) text(p.stall > 0 ? 'ENGINE STALL - FIND FUEL!' : 'LOW FUEL!', W / 2, H - 46, 8.5, '#ff5a4a', 'center', 800);
-    else if (p && !p.dead && p.armor < ST.armorMax * 0.2 && blink(3)) text('HEAVY DAMAGE!', W / 2, H - 46, 8.5, '#ff7a4a', 'center', 800);
+    if (p && !p.dead && p.armor < ST.armorMax * 0.2 && blink(3)) text('HEAVY DAMAGE!', W / 2, H - 52, 11, '#ff7a4a', 'center', 800);
   }
   function drawPopups() {
     hudT();
@@ -1928,7 +1940,7 @@ window.SKY = window.SKY || {};
   // ---------------------------------------------------------------- debug / test hooks
   G.debug = {
     info: () => ({ state, paused, phase, stage, level: curLevel() ? curLevel().id : null, stageT: +stageT.toFixed(2), stageLen, score, hiscore, merit: run ? run.merit : 0,
-      fuel: player ? +player.fuel.toFixed(2) : null, armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode, stall: player ? +player.stall.toFixed(2) : 0,
+      armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode,
       gun: run && run.gun, bomb: run && run.bomb, loopT: player ? player.loopT : 0, enemies: enemies.length, hulks: hulks.length, wing: wing.map((w) => ({ slot: w.slot, armor: +w.armor.toFixed(1), dead: w.dead })),
       boss: boss ? { type: boss.type, hp: +boss.hp.toFixed(1), maxhp: boss.maxhp, phase: boss.bphase, parts: boss.turrets.filter((t) => !t.dead).map((t) => t.kind), arrived: boss.arrived, dead: boss.dead } : null,
       pickups: pickups.map((k) => powType(k)), pb: pb.length, eb: eb.length, parts: parts.length, H, player: player ? { x: +player.x.toFixed(1), y: +player.y.toFixed(1) } : null,
@@ -1944,7 +1956,6 @@ window.SKY = window.SKY || {};
     setWeapon(kind, type, lvl) { if (!run) return; run[kind] = { type, lvl: lvl || 1 }; },
     setMode(m) { if (player) player.mode = m; },
     setArmor(v) { if (player) player.armor = v; },
-    setFuel(v) { if (player) player.fuel = v; },
     spawn(ev) { runEvent(ev); },
     god(v) { if (player) player.inv = v ? 1e9 : 0; },
     nuke: () => ({ dmg: NUKE.dmg, radius: NUKE.radius, spec: bombSpec('nuke', run ? run.bomb.lvl : 1), W, last: lastBlast, count: blastCount, live: nukes.length }),

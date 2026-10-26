@@ -116,12 +116,10 @@
   function collect(k) {
     const p = player, type = POW[k.fam][k.ti];
     k.taken = true; merit(3);
-    if (type === 'fuel') {
-      const gain = Math.min(35, ST.fuelMax - p.fuel); p.fuel = Math.min(ST.fuelMax, p.fuel + 35); p.stall = 0;
-      popup(p.x, p.y - 18, gain > 0 ? 'FUEL +' + Math.round(gain) : '+500', '#ffd34a', 7); A.sfx('energy'); addScore(500);
-    } else if (type === 'repair') {
-      const gain = Math.min(35, ST.armorMax - p.armor); p.armor = Math.min(ST.armorMax, p.armor + 35);
-      popup(p.x, p.y - 18, gain > 0 ? 'REPAIR +' + Math.round(gain) : '+500', '#9fe07a', 7); A.sfx('repair'); addScore(500);
+    if (type === 'repair') {
+      const patch = 35 * ST.repairGain, gain = Math.min(patch, ST.armorMax - p.armor);
+      p.armor = Math.min(ST.armorMax, p.armor + patch);
+      popup(p.x, p.y - 18, gain > 0 ? 'REPAIR +' + Math.round(gain) : '+500', '#9fe07a', 9); A.sfx('repair'); addScore(500);
       for (const w of wing) if (!w.dead) w.armor = Math.min(w.max, w.armor + 12);
     } else if (k.fam === 'gun') {
       const g = run.gun;
@@ -201,16 +199,18 @@
       }
       if (hit) b.life = 0;
       if (b.kind === 'pellet') {
-        for (const e of eb) if (!e.gone && swept(b, e.x, e.y, 8)) { e.gone = true; addScore(10); }
+        for (const e of eb) if (!e.gone && swept(b, e.x, e.y, 11)) { e.gone = true; addScore(10); }
       }
     }
     sweep(eb, (e) => e.gone);
     // elevators can also be wrecked by bomb blasts only: handled in blast() through damagePart
     if (!p.dead) {
       const vulnerable = p.loopT <= 0;
+      // The rounds are twice the size they were, so they take up twice the space - a shell you
+      // can see and fly around has to be a shell that is actually there.
       for (const e of eb) {
-        if (vulnerable && d2(e.x, e.y, p.x, p.y) < 42) { if (hurt(7)) { e.gone = true; continue; } }
-        for (const w of wing) if (!w.dead && d2(e.x, e.y, w.x, w.y) < 30) { if (hurtWing(w, 7)) e.gone = true; }
+        if (vulnerable && d2(e.x, e.y, p.x, p.y) < 81) { if (hurt(7)) { e.gone = true; continue; } }
+        for (const w of wing) if (!w.dead && d2(e.x, e.y, w.x, w.y) < 64) { if (hurtWing(w, 7)) e.gone = true; }
       }
       sweep(eb, (e) => e.gone);
       for (const e of enemies) {
