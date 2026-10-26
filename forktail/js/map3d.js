@@ -15,15 +15,28 @@ const toXZ = (lat, lon) => { if (lon < LON0) lon += 360; return new THREE.Vector
 
 export function createMap(S) {
   const M = { ok: true };
-  // One canvas and one renderer for the life of the page. The map used to take whatever <canvas>
-  // the freshly-built panel handed it, which meant a new WebGL context every time you opened the
-  // campaign map and a teardown of the old one that threw before it finished - so the second open
-  // left the panel half-built and every further open cost another context. A phone runs out of
-  // those long before a desktop does. The canvas is ours; the panel just borrows it.
-  const canvas = document.createElement('canvas');
-  canvas.className = 'mapcv';
+  // The canvas is ours, not the panel's. The map used to take whatever <canvas> the freshly-built
+  // panel handed it and tear down the old renderer to match, and that teardown threw before it
+  // finished - so the second open left the panel half-built and every further one cost another
+  // context. A phone runs out of those long before a desktop does.
+  //
+  // It is still ours, but it is no longer the same one all afternoon: a canvas that leaves the
+  // document loses the surface its renderer presents to, so each visit gets a fresh one and the
+  // renderer that goes with it, and the one before is disposed once the new one has drawn. See
+  // M.mount for what that was costing, newSurface and retire for the order it has to happen in.
+  let canvas = makeCanvas();
   let renderer = null, opts = null, raf = 0, ready = false, heightData = null;
-  let rInit = false, wired = false;
+  let rInit = false, lastTick = 0, lastDraw = 0, errs = 0, loopRevives = 0, wdT = 0, mountedAt = 0, mounted = false, visited = false;
+  function makeCanvas() {
+    const c = document.createElement('canvas');
+    c.className = 'mapcv';
+    c.addEventListener('pointerdown', onDown); c.addEventListener('pointermove', onMove);
+    c.addEventListener('pointerup', onUp); c.addEventListener('pointercancel', onUp);
+    c.addEventListener('wheel', onWheel, { passive: false });
+    // preventDefault is what makes the loss recoverable rather than permanent
+    c.addEventListener('webglcontextlost', (e) => { e.preventDefault(); rebuildRenderer('context lost'); });
+    return c;
+  }
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x1a140c, 24, 46);
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
@@ -130,8 +143,13 @@ export function createMap(S) {
   function disposeTree(root) {
     const geos = new Set(), mats = new Set();
     root.traverse((o) => { if (o.geometry) geos.add(o.geometry); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m)); });
-    for (const g of geos) g.dispose();
-    for (const m of mats) { if (SHARED.has(m) || labelMats.has(m)) continue; if (m.map) m.map.dispose(); m.dispose(); }
+    // Guarded, because a dispose can throw and this one runs at the top of every mount. Three
+    // keeps its per-material bookkeeping inside the renderer, so anything that was prepared by a
+    // renderer which has since been replaced - see rebuildRenderer - has nothing to look up and
+    // dies on the way out. A buffer left un-freed costs a few kilobytes; a throw here costs the
+    // whole mount, and the chart would stay frozen on the frame before it.
+    for (const g of geos) { try { g.dispose(); } catch (e) {} }
+    for (const m of mats) { if (SHARED.has(m) || labelMats.has(m)) continue; try { if (m.map) m.map.dispose(); m.dispose(); } catch (e) {} }
   }
   function buildPins() {
     while (pinGroup.children.length) { const c = pinGroup.children[0]; pinGroup.remove(c); disposeTree(c); }
@@ -229,7 +247,14 @@ export function createMap(S) {
   let selIdx = -1;
   function frameLoop(now) {
     raf = 0;
-    if (!canvas || !canvas.isConnected) { stop(); return; }
+    if (!mounted || !canvas || !canvas.isConnected) { stop(); return; }
+    lastTick = now;
+    // One throw used to end the chart for good: the re-arm is the last line of the frame, so an
+    // exception anywhere above it left raf at 0 with nobody to notice. Count them instead.
+    try { drawFrame(now); errs = 0; } catch (e) { if (++errs === 1) console.warn('map frame failed', e); if (errs >= 3) rebuildRenderer('frame threw'); }
+    raf = requestAnimationFrame(frameLoop);
+  }
+  function drawFrame(now) {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w && h) {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -245,37 +270,134 @@ export function createMap(S) {
       const sc = cam.dist / 15; p.lab.scale.set((p.st === 'fog' ? 0.5 : 1.9) * sc, (p.st === 'fog' ? 0.125 : 0.475) * sc, 1);
       p.lab.visible = p.st !== 'fog' || cam.dist < 12;
     }
-    if (rInit) renderer.render(scene, camera);
-    raf = requestAnimationFrame(frameLoop);
+    if (rInit) { renderer.render(scene, camera); lastDraw = now; }
+    // a chart that has run clean for half a minute has earned its retries back
+    if (rebuilds && now - lastRebuild > 30000) { rebuilds = 0; lastRebuild = 0; }
   }
   function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
-  // host is the .mapview box the panel builds; the canvas moves into it and back out again
+  function initRenderer() {
+    if (renderer) return;
+    renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false, powerPreference: 'low-power' });
+    rInit = false; renderer.init().then(() => { rInit = true; }).catch((e) => console.warn('map renderer init failed', e));
+    renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+    renderer.setClearColor(0x1a140c, 1);
+  }
+  // A fresh canvas and a fresh renderer, in place of whatever is there now. Everything on screen
+  // is scene data, so the new renderer uploads it again on its first frame.
+  function newSurface(host) {
+    const oldCv = canvas, oldR = renderer, where = host || oldCv.parentNode;
+    canvas = makeCanvas();
+    if (where) {                                     // in the document before init, or not at all
+      if (oldCv.parentNode === where) where.insertBefore(canvas, oldCv);
+      else where.insertBefore(canvas, where.firstChild);
+    }
+    if (oldCv.parentNode) oldCv.parentNode.removeChild(oldCv);
+    renderer = null; rInit = false; errs = 0; lastTick = lastDraw = 0;
+    initRenderer();
+    retire(oldR);
+  }
+  // Disposing a WebGPURenderer destroys the device under it, so the order matters: dispose first
+  // and the replacement comes up on that destroyed device and paints nothing at all - a black
+  // canvas with render() returning cleanly, which is a worse lie than the stale frame all of this
+  // exists to cure. Wait until the new one has a frame on the screen, then let the old one go.
+  function retire(old) {
+    if (!old || !old.dispose) return;
+    let waited = 0;
+    const t = setInterval(() => {
+      if (!(lastDraw || (waited += 150) > 3000)) return;
+      clearInterval(t);
+      try { old.dispose(); } catch (e) {}
+    }, 150);
+  }
+  let rebuilding = false, rebuilds = 0, lastRebuild = 0;
+  const REBUILD_CAP = 4;
+  function rebuildRenderer(why) {
+    if (rebuilding) return;
+    if (rebuilds >= REBUILD_CAP) { giveUp(); return; }   // a chart that will not come back must not spin
+    rebuilding = true; rebuilds++; lastRebuild = clock();
+    console.warn('map chart restarting:', why, '(' + rebuilds + ')');
+    stop();
+    newSurface(null);
+    mountedAt = clock();
+    if (canvas.isConnected) raf = requestAnimationFrame(frameLoop);
+    rebuilding = false;
+  }
+  // Out of tries. Rather than leave a dead chart on screen pretending to be the campaign, hand
+  // the panel back the plain mission list it shows when there is no WebGL at all - .nomap hides
+  // the view and un-hides the list, which is the one that works on a phone.
+  function giveUp() {
+    mounted = false; stop(); if (wdT) { clearTimeout(wdT); wdT = 0; }
+    const host = canvas.parentNode;
+    if (host) { host.classList.add('nomap'); host.removeChild(canvas); }
+    M.ok = false;
+    console.warn('map chart disabled; falling back to the battle list');
+  }
+  // named clock, not now: frameLoop and drawFrame both take `now` as the frame timestamp
+  const clock = () => (window.performance && performance.now ? performance.now() : Date.now());
+  // The chart is the one part of this screen that can fail silently - a dead renderer leaves the
+  // last good frame sitting there looking like live information. So it gets checked rather than
+  // trusted: a loop that has stopped ticking is restarted, and a loop that ticks without drawing
+  // is a renderer that has lost its context and needs replacing.
+  function watchdog() {
+    wdT = 0;
+    if (!mounted || !canvas || !canvas.isConnected) return;   // chart is not on screen; nothing to police
+    // A hidden page gets no animation frames at all, which is not a fault and must not be
+    // mistaken for one - the kick on visibilitychange is what picks it back up.
+    if (document.hidden) { wdT = setTimeout(watchdog, 1500); return; }
+    // Generous thresholds on purpose. A phone that has just built this panel can lose a couple of
+    // seconds to one long frame, and that is not a dead chart - it is a busy one. Waiting costs a
+    // few seconds of staleness in a case that fixes itself; not waiting costs a restart every
+    // time the machine is briefly under load.
+    const t = clock();
+    if (lastTick && t - lastTick > 2500) {
+      if (++loopRevives >= 3) rebuildRenderer('loop will not stay up');
+      else { stop(); raf = requestAnimationFrame(frameLoop); }
+    } else if (t - lastTick < 2500) loopRevives = 0;
+    if (rInit && lastDraw && t - lastDraw > 5000) rebuildRenderer('renderer stopped drawing');
+    else if (!rInit && mountedAt && t - mountedAt > 10000) rebuildRenderer('renderer never started');
+    wdT = setTimeout(watchdog, 1500);
+  }
+  // Coming back from the background: the clocks restart from here, so the gap the page spent
+  // hidden is not read as a stall the moment the watchdog next runs.
+  function kick() {
+    if (!mounted || !canvas || !canvas.isConnected) return;
+    const t = clock(); if (lastTick) lastTick = t; if (lastDraw) lastDraw = t; mountedAt = mountedAt ? t : 0; loopRevives = 0;
+    if (!raf) raf = requestAnimationFrame(frameLoop);
+    if (!wdT) wdT = setTimeout(watchdog, 1500);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+
+  // host is the .mapview box the panel builds; the chart moves into it for as long as it is open
   M.mount = function (host, o) {
     opts = o;
-    if (canvas.parentNode !== host) host.insertBefore(canvas, host.firstChild);   // behind the legend
-    if (!renderer) {
-      renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false, powerPreference: 'low-power' });
-      rInit = false; renderer.init().then(() => { rInit = true; }).catch((e) => console.warn('map renderer init failed', e));
-      renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
-      renderer.setClearColor(0x1a140c, 1);
-    }
-    if (!wired) {
-      wired = true;
-      canvas.addEventListener('pointerdown', onDown); canvas.addEventListener('pointermove', onMove); canvas.addEventListener('pointerup', onUp); canvas.addEventListener('pointercancel', onUp);
-      canvas.addEventListener('wheel', onWheel, { passive: false });
-    }
-    buildPins(); paintFog();
+    // Every visit after the first gets a new canvas and a new renderer. A chart that has been
+    // put away and brought back does not come back to life: the surface the renderer presents to
+    // is destroyed when the canvas leaves the document, and nothing anywhere says so - the loop
+    // runs, render() returns cleanly, and the canvas goes on showing the frame the last visit
+    // ended on. That is the stale chart: a campaign three battles further along still drawn with
+    // a finished mission pulsing as the one to fly next, while the card and the buttons beside it
+    // were right all along. There is no way to hand the old renderer a new surface, so it is the
+    // renderer that gets replaced.
+    if (visited) newSurface(host);
+    else if (canvas.parentNode !== host) host.insertBefore(canvas, host.firstChild);   // behind the legend
+    visited = true;
+    initRenderer();
+    // Nothing in the build is allowed to stop the loop from starting below - a chart that is a
+    // pin short is still a chart, a chart that never gets a frame is last week's news.
+    try { buildPins(); paintFog(); } catch (e) { console.warn('map pins failed', e); }
     const next = pins.find((p) => p.st === 'avail') || pins[0];
     if (next) { cam.tx = cam.x = next.pos.x; cam.tz = cam.z = next.pos.z + 0.6; }
     cam.td = cam.dist = 13;
-    // always restart the loop. The chain clears `raf` at the top of every frame and drops it
-    // entirely if the canvas is off the document, so "only start one if none is running" could
-    // leave the panel showing the frame from the last visit - the chart as it was before the
-    // battle you have just won.
+    // always restart the loop rather than leaving one that may be running: the chain clears
+    // `raf` at the top of every frame and drops it entirely when the chart is not on screen
+    mounted = true; mountedAt = clock(); lastTick = lastDraw = 0; loopRevives = 0; errs = 0;
     stop(); raf = requestAnimationFrame(frameLoop);
+    if (wdT) clearTimeout(wdT);
+    wdT = setTimeout(watchdog, 1500);
   };
-  // leaving the map stops the loop and takes the canvas out of the panel - the context stays ours
-  M.detach = function () { stop(); ptrs.clear(); if (canvas.parentNode) canvas.parentNode.removeChild(canvas); };
+  // leaving the map stops the loop and takes the canvas out of the panel; the next visit brings
+  // a new one, because this one's surface does not survive the trip - see M.mount
+  M.detach = function () { mounted = false; stop(); if (wdT) { clearTimeout(wdT); wdT = 0; } ptrs.clear(); if (canvas.parentNode) canvas.parentNode.removeChild(canvas); };
   M.unmount = M.detach;
   M.select = function (i) { selIdx = i; };
   // `snap` jumps the camera instead of gliding - for opening the chart, where a glide would be a
@@ -287,5 +409,9 @@ export function createMap(S) {
   };
   M.isReady = () => ready;
   M.coords = COORD; M._fog = fogC; M._pins = () => pins; M._cam = cam;
+  M._diag = () => ({ rInit, raf: !!raf, wd: !!wdT, errs, rebuilds, loopRevives, sinceTick: lastTick ? Math.round(clock() - lastTick) : -1, sinceDraw: lastDraw ? Math.round(clock() - lastDraw) : -1, canvas, renderer });
+  // for testing the recovery paths from the console: _break('loop') kills the frame loop,
+  // _break('throw') makes rendering fail, _break() leaves the renderer uninitialised
+  M._break = (how) => { if (how === 'loop') { stop(); } else if (how === 'throw') { renderer = { render() { throw new Error('test'); } }; } else { rInit = false; } };
   return M;
 }
