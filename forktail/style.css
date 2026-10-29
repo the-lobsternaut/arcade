@@ -186,6 +186,22 @@ html, body {
 /* dossier */
 .dgrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 5px; align-content: start; }
 .dcard { padding: 6px; cursor: pointer; } .dcard b { display: block; font-size: 12px; margin-top: 3px; } .dcard small { font-size: 10.5px; color: #c9c2ad; }
+.dossier .hslot.zoom { cursor: zoom-in; }
+/* portrait lightbox: the whole screen, the picture as large as it fits, the X clear of the notch */
+.lightbox { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 40; pointer-events: auto; touch-action: none;
+  background: rgba(3,4,8,0.94); opacity: 0; transition: opacity 0.2s;
+  padding: calc(var(--sat) + 8px) calc(var(--sar) + 8px) calc(var(--sab) + 8px) calc(var(--sal) + 8px); }
+.lightbox.in { opacity: 1; }
+.lbslot { position: relative; width: 100%; height: 100%; }
+/* #ui button resets the font, so the cross is drawn, not typed: same weight on every device */
+#ui .lbx { position: absolute; top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px); z-index: 2; width: 52px; height: 52px;
+  padding: 0; border-radius: 50%; cursor: pointer; background: rgba(20,22,28,0.82);
+  border: 2px solid rgba(240,210,140,0.9); box-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+#ui .lbx::before, #ui .lbx::after { content: ''; position: absolute; left: 50%; top: 50%; width: 24px; height: 3px; margin: -1.5px 0 0 -12px;
+  border-radius: 2px; background: #fff6e2; transform: rotate(45deg); }
+#ui .lbx::after { transform: rotate(-45deg); }
+#ui .lbx:active { transform: scale(0.95); }
+#ui .lbx:focus { outline: none; } #ui .lbx:focus-visible { outline: 2px solid #f5d77a; outline-offset: 2px; }
 .dcard.axis, .dcard.rival { border-color: rgba(220,90,70,0.7); } .dcard.locked { opacity: 0.45; cursor: default; }
 /* saves */
 .saves .pbody, .prompt .pbody { justify-content: center; }

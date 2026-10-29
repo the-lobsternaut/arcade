@@ -29,6 +29,7 @@ window.SKY = window.SKY || {};
   const pick = dealLine;
   const ui = $('#ui');
   const UI = S.ui = { open: null };
+  let lightbox = null;            // the dossier portrait, full screen (see openLightbox)
   const CTRL = ST.CONTROLLER;
 
   // ---------------------------------------------------------------- character view
@@ -219,7 +220,7 @@ window.SKY = window.SKY || {};
     requestAnimationFrame(() => p.classList.add('in'));
     return p;
   }
-  function closePanel() { if (S.map3d && S.map3d.ok) S.map3d.detach(); if (UI.open) { UI.open.remove(); UI.open = null; } hideChar(); }
+  function closePanel() { closeLightbox(false); if (S.map3d && S.map3d.ok) S.map3d.detach(); if (UI.open) { UI.open.remove(); UI.open = null; } hideChar(); }
   UI.close = closePanel;
   function btn(label, cls, fn) { const b = h('button', 'btn ' + (cls || ''), label); b.addEventListener('click', (e) => { e.stopPropagation(); A.unlock(); A.sfx('click'); fn(e); }); return b; }
   function syncBadge(p) { const s = $('.psync', p); if (!s || !SV) return; s.textContent = SV.lastStatus || ''; s.className = 'psync ' + (SV.online ? 'on' : 'off'); }
@@ -236,6 +237,7 @@ window.SKY = window.SKY || {};
     // 'fit' shows the whole picture; 'bust' fills the box by cropping, and what it crops is the
     // top of the head. The slot is a 2:3 box now, so there is nothing to crop anyway.
     showChar($('.hslot', p), who, look, { expr: expr, framing: framing || 'fit', animate: true });
+    p._face = { who: who, look: look, expr: expr };
     charTalk(Math.min(5, text.length * 0.04));
     $('.hact', box).innerHTML = '';
     return true;
@@ -493,6 +495,43 @@ window.SKY = window.SKY || {};
   UI.openVictory = openVictory;
   G.hooks.victory = (st) => { openVictory(st); return true; };
 
+  // ---------------------------------------------------------------- portrait lightbox
+  // A tap on the dossier portrait lifts her out of the corner and onto the whole screen. It is the
+  // same character canvas, moved into a bigger box, so a clip keeps playing and the art is drawn
+  // from the full painted frame rather than enlarged from the thumbnail. The X is the only way out
+  // besides Escape: the picture itself is most of the screen, and a tap on it is not a request to
+  // leave. Closing hands the canvas straight back to the slot it came from.
+  function openLightbox(p) {
+    const f = p && p._face;
+    if (!f || !hasFace(f.who) || lightbox) return;
+    const lb = h('div', 'lightbox', '<div class="lbslot"></div><button class="lbx" type="button" aria-label="Close"></button>');
+    lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-modal', 'true');
+    // nothing pressed in here is meant for the game underneath
+    lb.addEventListener('pointerdown', (e) => e.stopPropagation());
+    lb.addEventListener('click', (e) => e.stopPropagation());
+    const x = $('.lbx', lb);
+    x.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); A.sfx('click'); closeLightbox(true); });
+    ui.appendChild(lb);
+    lightbox = { el: lb, p: p, face: f };
+    showChar($('.lbslot', lb), f.who, f.look, { expr: f.expr, framing: 'fit', animate: true });
+    requestAnimationFrame(() => lb.classList.add('in'));
+    x.focus({ preventScroll: true });
+  }
+  function closeLightbox(restore) {
+    if (!lightbox) return;
+    const { el, p, face } = lightbox;
+    lightbox = null;
+    el.remove();
+    if (restore && UI.open === p) { const slot = $('.hslot', p); if (slot) showChar(slot, face.who, face.look, { expr: face.expr, framing: 'fit', animate: true }); }
+  }
+  UI.lightbox = () => !!lightbox;
+  // Escape closes the picture and only the picture - it is swallowed here so nothing behind it
+  // (pause, a panel) ever sees the same keypress.
+  window.addEventListener('keydown', (e) => {
+    if (!lightbox) return;
+    if (e.key === 'Escape' || e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeLightbox(true); }
+  }, true);
+
   // ---------------------------------------------------------------- dossier
   function openDossier(back) {
     const p = panel('dossier', 'DOSSIER');
@@ -504,6 +543,9 @@ window.SKY = window.SKY || {};
     const body = $('.pbody', p);
     body.innerHTML = '<div class="dleft"><div class="hslot"></div><div class="hsay"><div class="hname"></div><div class="htext"></div><div class="hact"></div></div></div><div class="dgrid"></div>';
     const grid = $('.dgrid', p);
+    const dslot = $('.hslot', p);
+    dslot.classList.add('zoom'); dslot.title = 'View full screen';
+    dslot.addEventListener('click', (e) => { e.stopPropagation(); A.sfx('click'); openLightbox(p); });
     for (const g of roster) {
       const ok = met.indexOf(g.id) >= 0;
       const c = h('div', 'dcard ' + (ok ? g.side : 'locked'));

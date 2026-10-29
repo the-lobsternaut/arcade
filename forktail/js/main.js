@@ -116,7 +116,7 @@
   window.addEventListener('pagehide', () => { G.saveNow(); if (S.saves) S.saves.autosave('background'); });
   window.addEventListener('pointerdown', (e) => {
     A.unlock();
-    if (e.target && e.target.closest && e.target.closest('#ui .panel, #ui .toast')) return; // DOM UI handles its own input
+    if (e.target && e.target.closest && e.target.closest('#ui .panel, #ui .toast, #ui .lightbox')) return; // DOM UI handles its own input
     if (e.pointerType === 'touch' || e.pointerType === 'pen') G.touchMode = true;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     pointers.add(e.pointerId);
