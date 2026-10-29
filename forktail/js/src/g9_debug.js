@@ -2,7 +2,7 @@
   // ---------------------------------------------------------------- debug / test hooks
   G.debug = {
     info: () => ({ state, paused, phase, stage, level: curLevel() ? curLevel().id : null, stageT: +stageT.toFixed(2), stageLen, score, hiscore, merit: run ? run.merit : 0,
-      armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode,
+      armor: player ? +player.armor.toFixed(1) : null, dmgStage: player ? damageStage(player.armor / ST.armorMax) : 0, mode: player && player.mode, bombCd: player ? +player.bombCd.toFixed(2) : null,
       gun: run && run.gun, bomb: run && run.bomb, loopT: player ? player.loopT : 0, enemies: enemies.length, hulks: hulks.length, wing: wing.map((w) => ({ slot: w.slot, armor: +w.armor.toFixed(1), dead: w.dead })),
       boss: boss ? { type: boss.type, hp: +boss.hp.toFixed(1), maxhp: boss.maxhp, phase: boss.bphase, parts: boss.turrets.filter((t) => !t.dead).map((t) => t.kind), arrived: boss.arrived, dead: boss.dead } : null,
       pickups: pickups.map((k) => powType(k)), pb: pb.length, eb: eb.length, parts: parts.length, H, player: player ? { x: +player.x.toFixed(1), y: +player.y.toFixed(1) } : null,

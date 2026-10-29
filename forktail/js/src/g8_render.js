@@ -157,9 +157,17 @@
     // wingmen ride on the armor row now that it is the only bar up here
     let wx = 226;
     for (const w of wing) { text('W' + (w.slot + 1), wx, 27.8, 6.6, w.dead ? '#7a4a44' : '#9fd8ff', 'left', 800, false); if (!w.dead) bar(wx + 11, 24.2, 9, 6, w.armor / w.max, '#7fbcd8'); wx += 23; }
+    // The bomb rack gets its own line, straight under the armor, where the eye already is. It
+    // used to be a hairline under the BOMBS chip and a fill in the mode button, which you could
+    // only read while you were not flying.
+    const bcd = bombCooldown(run.bomb.type, run.bomb.lvl);
+    const rdy = p.bombCd <= 0, bf = rdy ? 1 : 1 - clamp(p.bombCd / bcd, 0, 1);
+    text('BOMB', 3, 40.3, 8, rdy ? BRASS : '#ffb04a', 'left', 800, false);
+    bar(33, 36.5, 168, 7, bf, rdy ? '#e8b04a' : '#a8743a');
+    text(rdy ? 'READY' : p.bombCd.toFixed(1) + 's', 205, 40.6, 8, rdy ? '#9fe07a' : PAPER, 'left', 700, false, MONO);
     // weapon modes
     const gm = p.mode === 'guns', gn = GUNS[run.gun.type], bm = BOMBS[run.bomb.type];
-    const y = 39.5, ch = 12;
+    const y = 51, ch = 12;
     ctx.fillStyle = gm ? 'rgba(255,224,102,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(2, y - ch / 2, 120, ch);
     ctx.fillStyle = !gm ? 'rgba(255,176,74,0.22)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(126, y - ch / 2, 142, ch);
     ctx.strokeStyle = gm ? '#ffe066' : '#ffb04a'; ctx.lineWidth = 0.7;
@@ -167,11 +175,7 @@
     text('GUNS', 5, y + 0.4, 7.4, gm ? '#ffe066' : '#8b8778', 'left', 800, false);
     text(gn.name + ' ' + 'I'.repeat(run.gun.lvl), 33, y + 0.4, 7.4, gm ? gn.col : '#8b8778', 'left', 800, false);
     text('BOMBS', 129, y + 0.4, 7.4, !gm ? '#ffb04a' : '#8b8778', 'left', 800, false);
-    const bcd = bombCooldown(run.bomb.type, run.bomb.lvl);
-    // A 30-second reload is too long to read off a bar, so a long one counts itself down.
-    const bwait = p.bombCd > 0 && bcd > 4;
-    text(bwait ? bm.name + ' ' + Math.ceil(p.bombCd) + 's' : bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 166, y + 0.4, 7.4, bwait ? '#8b8778' : !gm ? bm.col : '#8b8778', 'left', 800, false);
-    if (p.bombCd > 0) { ctx.fillStyle = gm ? 'rgba(255,176,74,0.35)' : 'rgba(255,176,74,0.7)'; ctx.fillRect(126, y + ch / 2 - 1.2, 142 * (1 - clamp(p.bombCd / bcd, 0, 1)), 1.2); }
+    text(bm.name + ' ' + 'I'.repeat(run.bomb.lvl), 166, y + 0.4, 7.4, !gm ? bm.col : '#8b8778', 'left', 800, false);
     if (boss && !boss.dead && phase === 'boss') {
       const w2 = W - 80, f = boss.hp / boss.maxhp;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(39, HUD_H + 3, w2 + 2, 5);
@@ -213,13 +217,12 @@
     });
     [x, y, r] = modeBtn();
     const gm = p && p.mode === 'guns';
-    const bcd = p ? bombCooldown(run.bomb.type, run.bomb.lvl) : 1;
-    const reloading = p && !gm && p.bombCd > 0;
-    roundBtn(x, y, r, true, reloading ? 'RELOAD' : gm ? 'GUNS' : 'BOMBS', () => {
+    // the reload has its own line under the armor; this button only ever says which weapon is up
+    roundBtn(x, y, r, true, gm ? 'GUNS' : 'BOMBS', () => {
       ctx.fillStyle = gm ? '#ffe066' : '#ffb04a';
       if (gm) { for (const dx of [-2.4, 0, 2.4]) ctx.fillRect(x + dx - 0.6, y - 6, 1.2, 6); }
       else { ctx.beginPath(); ctx.ellipse(x, y - 2.5, 2.4, 4, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - 2.6, y + 0.6, 5.2, 1); }
-    }, reloading ? 1 - clamp(p.bombCd / bcd, 0, 1) : 0);
+    }, 0);
   }
   function dim(a) { hudT(); ctx.fillStyle = `rgba(4,8,14,${a})`; ctx.fillRect(0, 0, W, H); }
   function blink(rate) { return ((time * (rate || 2.2)) | 0) % 2 === 0; }

@@ -3,7 +3,7 @@ window.SKY = window.SKY || {};
 (function (S) {
   'use strict';
   const A = S.audio, SP = S.sprites;
-  const W = 270, HUD_H = 46, SCROLL = 26, TAU = Math.PI * 2;
+  const W = 270, HUD_H = 58, SCROLL = 26, TAU = Math.PI * 2;
   // ---- altitude is a rendering property, not a game axis. Aircraft fly in the air, anything
   // that floats sits on the water, and that is all it ever decides: which height the renderer
   // draws a thing at, and where its shadow falls. 3D mode is a camera change. It does not gate

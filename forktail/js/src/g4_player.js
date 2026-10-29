@@ -125,18 +125,14 @@
       // the loop is free; the only thing between you and the next one is the recovery
       if (p.loopT <= 0 && p.loopCd <= 0) { p.loopT = LOOP_TIME; A.sfx('loop'); popup(p.x, p.y + 20, 'LOOP', '#9fd8ff', 8); }
     }
-    // The mode button does the obvious thing with the bomb still reloading: it reloads it. Tapping
-    // a dead bomb and being handed the machine guns instead was the wrong answer to the only
-    // question you are asking at that moment. Once the rack is full the button goes back to being
-    // the weapon switch.
+    // The mode button is the weapon switch and nothing else. It used to finish a reload when
+    // tapped with the rack empty, which made the reload a formality - one tap and the clock was
+    // gone. The rack reloads on its own clock now, whichever weapon is selected, and switching
+    // neither restarts it nor skips it.
     if (inp.mode) {
       inp.mode = false;
-      if (p.mode === 'bombs' && p.bombCd > 0) {
-        p.bombCd = 0; A.sfx('repair'); popup(p.x, p.y + 22, 'RELOADED', '#ffb04a', 9);
-      } else {
-        p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode');
-        popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 9);
-      }
+      p.mode = p.mode === 'guns' ? 'bombs' : 'guns'; A.sfx('mode');
+      popup(p.x, p.y + 22, p.mode === 'guns' ? 'GUNS' : 'BOMBS', p.mode === 'guns' ? '#ffe066' : '#ffb04a', 9);
     }
     // armor: optional self-repair; an engine fire slowly eats armor (never below 1) unless suppressed
     if (ST.regen > 0 && af < 0.6) p.armor = Math.min(ST.armorMax * 0.6, p.armor + ST.regen * dt);

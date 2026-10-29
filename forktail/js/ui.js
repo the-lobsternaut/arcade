@@ -88,7 +88,7 @@ window.SKY = window.SKY || {};
     // right-hand edge of its own or it reads as cut off.
     el.classList.toggle('inset', f.x + w < f.aw - 2);
     el.style.left = f.x + 'px';
-    el.style.top = (f.y + f.h * 0.085) + 'px';
+    el.style.top = (f.y + f.h * ((G.HUD_H + 4) / (G.getH ? G.getH() : 585))) + 'px';
     el.style.width = w + 'px';
     el.style.height = ah + 'px';
     const slot = $('.tslot', el), txt = $('.ttext', el);
